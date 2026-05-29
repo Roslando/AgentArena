@@ -1,0 +1,19 @@
+{
+  "name": "@agentarena/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "agentarena": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "bun run tsc",
+    "dev": "bun run tsc --watch"
+  },
+  "dependencies": {
+    "@agentarena/engine": "workspace:*",
+    "@agentarena/types": "workspace:*"
+  }
+}
