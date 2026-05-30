@@ -1,0 +1,21 @@
+{
+  "name": "@agentarena/game-chess",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "bun run tsc",
+    "dev": "bun run tsc --watch"
+  },
+  "dependencies": {
+    "@agentarena/types": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.11.0",
+    "chess.js": "^1.0.0-beta.8"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^5.7.0"
+  }
+}

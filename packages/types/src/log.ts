@@ -15,7 +15,8 @@ export type LogEntry =
   | GameOverEntry
   | ForfeitEntry
   | MatchStartEntry
-  | MatchEndEntry;
+  | MatchEndEntry
+  | TurnMetricsEntry;
 
 interface BaseEntry {
   /** ISO-8601 timestamp */
@@ -107,4 +108,11 @@ export interface MatchEndEntry extends BaseEntry {
   type: "match.end";
   winnerId?: string;
   reason: string;
+}
+
+export interface TurnMetricsEntry extends BaseEntry {
+  type: "turn_metrics";
+  thinkingTimeMs: number;
+  totalThinkingTimeMs: number;
+  turnNumber: number;
 }

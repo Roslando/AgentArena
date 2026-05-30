@@ -80,6 +80,7 @@ export const MatchConfigSchema = z.object({
   players: z.array(PlayerConfigSchema).min(2).max(16),
   mcpServer: McpServerConfigSchema,
   limits: MatchLimitsSchema.default({}),
+  stateToolName: z.string().default("get_state"),
 });
 
 export type MatchConfig = z.infer<typeof MatchConfigSchema>;

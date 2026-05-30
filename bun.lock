@@ -33,6 +33,19 @@
         "zod": "^3.24.0",
       },
     },
+    "packages/game-chess": {
+      "name": "@agentarena/game-chess",
+      "version": "0.1.0",
+      "dependencies": {
+        "@agentarena/types": "workspace:*",
+        "@modelcontextprotocol/sdk": "^1.11.0",
+        "chess.js": "^1.0.0-beta.8",
+      },
+      "devDependencies": {
+        "@types/node": "^25.9.1",
+        "typescript": "^5.7.0",
+      },
+    },
     "packages/types": {
       "name": "@agentarena/types",
       "version": "0.1.0",
@@ -45,6 +58,8 @@
     "@agentarena/cli": ["@agentarena/cli@workspace:packages/cli"],
 
     "@agentarena/engine": ["@agentarena/engine@workspace:packages/engine"],
+
+    "@agentarena/game-chess": ["@agentarena/game-chess@workspace:packages/game-chess"],
 
     "@agentarena/types": ["@agentarena/types@workspace:packages/types"],
 
@@ -221,6 +236,8 @@
     "chai": ["chai@5.3.3", "", { "dependencies": { "assertion-error": "^2.0.1", "check-error": "^2.1.1", "deep-eql": "^5.0.1", "loupe": "^3.1.0", "pathval": "^2.0.0" } }, "sha512-4zNhdJD/iOjSH0A05ea+Ke6MU5mmpQcbQsSOkgdaUMJ9zTlDTD/GYlwohmIE2u0gaxHYiVHEn1Fw9mZ/ktJWgw=="],
 
     "check-error": ["check-error@2.1.3", "", {}, "sha512-PAJdDJusoxnwm1VwW07VWwUN1sl7smmC3OKggvndJFadxxDRyFJBX/ggnu/KE4kQAB7a3Dp8f/YXC1FlUprWmA=="],
+
+    "chess.js": ["chess.js@1.4.0", "", {}, "sha512-BBJgrrtKQOzFLonR0l+k64A98NLemPwNsCskwb+29bRwobUa4iTm51E1kwGPbWXAcfdDa18nad6vpPPKPWarqw=="],
 
     "colorette": ["colorette@2.0.20", "", {}, "sha512-IfEDxwoWIjkeXL1eXcDiow4UbKjhLdq6/EuSVR9GMN7KVH3r9gQ83e73hsz1Nd1T3ijd5xv1wcWRYO+D6kCI2w=="],
 
