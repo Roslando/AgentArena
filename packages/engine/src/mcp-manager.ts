@@ -105,6 +105,34 @@ export class McpManager {
   }
 
   /**
+   * Fetches the first system prompt exposed by the MCP server, if any.
+   * Returns null if the server exposes no prompts or an error occurs.
+   */
+  async getSystemPrompt(): Promise<string | null> {
+    try {
+      const { prompts } = await this.client.listPrompts();
+      const firstName = prompts?.[0]?.name;
+      if (!firstName) return null;
+
+      const result = await this.client.getPrompt({ name: firstName });
+      const text = result.messages
+        .map((m) => {
+          const c = m.content;
+          if (typeof c === "string") return c;
+          if (c && typeof c === "object" && "text" in c) return String(c.text);
+          return "";
+        })
+        .join("\n")
+        .trim();
+
+      return text || null;
+    } catch {
+      // Server doesn't support prompts capability — silent fallback
+      return null;
+    }
+  }
+
+  /**
    * Gracefully disconnect from the MCP server.
    */
   async disconnect(): Promise<void> {

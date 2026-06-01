@@ -2,6 +2,8 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { ChessGame } from "./chess-game.js";
@@ -10,15 +12,21 @@ const game = new ChessGame();
 
 const server = new Server(
   { name: "agentarena-game-chess", version: "0.1.0" },
-  { capabilities: { tools: {} } },
+  { capabilities: { tools: {}, prompts: {} } },
 );
+
+const CHESS_SYSTEM_PROMPT =
+  "You are a professional chess player playing a match.\n" +
+  "Analyze the current board state and decide your next move.\n" +
+  "Output your decision in one short sentence, then call the move tool.\n" +
+  "No lists. No JSON. No long explanations.";
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "get_board",
       description:
-        "Returns the current chess board as an ASCII diagram with FEN, turn, captured pieces, fault counts, time remaining, and game status (check/checkmate/stalemate). Call this at the start of each turn.",
+        "Returns the current board state: a Unicode diagram, FEN, which color you play (you_are), whose turn it is, opponent's last move (last_move_san/last_move_uci), pieces captured by each side, fault counts, and game status (check/checkmate/stalemate). Called automatically by the arena at turn start — call it again only if you need a refreshed view.",
       inputSchema: { type: "object", properties: {} },
     },
     {
@@ -170,6 +178,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 
   throw new Error(`Unknown tool: ${name}`);
+});
+
+server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+  prompts: [
+    {
+      name: "play-prompt",
+      description: "System prompt for chess gameplay (AgentArena)",
+    },
+  ],
+}));
+
+server.setRequestHandler(GetPromptRequestSchema, async (req) => {
+  if (req.params.name !== "play-prompt") {
+    throw new Error(`Unknown prompt: ${req.params.name}`);
+  }
+  return {
+    description: "System prompt for chess gameplay (AgentArena)",
+    messages: [
+      { role: "user" as const, content: { type: "text" as const, text: CHESS_SYSTEM_PROMPT } },
+    ],
+  };
 });
 
 const transport = new StdioServerTransport();

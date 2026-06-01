@@ -82,11 +82,17 @@ export class MatchRunner {
         },
       }));
 
-      // Give each player the system prompt once (per-player override)
+      // Fetch game-specific prompt from MCP server (null if not exposed)
+      const mcpPrompt = await this.mcp.getSystemPrompt();
+
+      // Give each player the system prompt once — 3-level fallback:
+      // 1. configPlayer.systemPrompt  (explicit override in match.config.json)
+      // 2. mcpPrompt                  (prompt exposed by the MCP game server)
+      // 3. DEFAULT_SYSTEM_PROMPT      (generic global fallback)
       const histories: Array<Array<{ role: "system" | "user" | "assistant"; content: string }>> =
         this.players.map((player) => {
           const configPlayer = this.config.players.find((p) => p.id === player.id);
-          const prompt = configPlayer?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+          const prompt = configPlayer?.systemPrompt ?? mcpPrompt ?? DEFAULT_SYSTEM_PROMPT;
           return [{ role: "system" as const, content: prompt }];
         });
 
@@ -378,17 +384,10 @@ export class MatchRunner {
   }
 }
 
-const DEFAULT_SYSTEM_PROMPT = `You are playing a game.
-
-WORKFLOW:
-1. Call the state tool to see the current board.
-2. Decide your move.
-3. Call the move tool.
-
-RESPONSE FORMAT:
-Output your decision in one short sentence, then call the tool.
-
-No lists. No JSON. No explanations.`;
+const DEFAULT_SYSTEM_PROMPT =
+  "You are an AI agent competing in a game.\n" +
+  "Analyze the current game state, then call the appropriate tool to take your action.\n" +
+  "One sentence of reasoning, then the tool call. No lists. No JSON. No long explanations.";
 
 /**
  * Extract text content from an MCP callTool result.
