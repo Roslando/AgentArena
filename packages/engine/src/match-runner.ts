@@ -195,7 +195,7 @@ export class MatchRunner {
         // Execute tool calls
         if (response.toolCalls.length > 0) {
           for (const tc of response.toolCalls) {
-            const args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
+            let args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
             let attempt = 0;
 
             while (attempt < this.config.limits.maxRetriesPerTurn) {
@@ -237,6 +237,40 @@ export class MatchRunner {
                   );
                 }
 
+                // Illegal move — fault incremented by the game server, but turn is NOT over.
+                // Notify the LLM and let it retry within the same turn.
+                const resultContent = extractTextContent(result);
+                const resultJson = tryParseJson(resultContent);
+
+                if (resultJson?.accepted === false) {
+                  attempt++;
+                  if (attempt >= this.config.limits.maxRetriesPerTurn) {
+                    // Safety cap — in practice the game server forfeits at 3 faults first
+                    return await this.endMatch("forfeit", this.getNextPlayer(currentPlayerIndex)?.id);
+                  }
+
+                  history.push({ role: "assistant", content: response.content });
+                  history.push({
+                    role: "user",
+                    content: `Illegal move. Faults: ${String(resultJson.faults_total ?? "?")}/3. Try a different legal move.`,
+                  });
+
+                  // Re-send to LLM with the error context
+                  try {
+                    response = await player.provider.send(history, toolDefs, {
+                      maxTokens: this.config.limits.maxTokensPerTurn,
+                    });
+                    // Extract new args from the LLM's corrected tool call
+                    const newTc = response.toolCalls[0];
+                    if (newTc) {
+                      args = JSON.parse(newTc.function.arguments) as Record<string, unknown>;
+                    }
+                  } catch {
+                    break; // LLM failed to respond — give up on this turn
+                  }
+                  continue; // Retry while loop with updated args
+                }
+
                 this.log.write({
                   type: "turn_metrics",
                   t: new Date().toISOString(),
@@ -247,10 +281,6 @@ export class MatchRunner {
                   turnDurationMs: Math.round(performance.now() - llmStartTime),
                   turnNumber: turn,
                 });
-
-                // Track last move details for context pruning (Change 3)
-                const resultContent = extractTextContent(result);
-                const resultJson = tryParseJson(resultContent);
                 if (resultJson?.san && resultJson?.piece_moved) {
                   const detail: LastMoveDetail = {
                     san: String(resultJson.san),
