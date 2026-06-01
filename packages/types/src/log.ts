@@ -16,7 +16,8 @@ export type LogEntry =
   | ForfeitEntry
   | MatchStartEntry
   | MatchEndEntry
-  | TurnMetricsEntry;
+  | TurnMetricsEntry
+  | MatchSummaryEntry;
 
 interface BaseEntry {
   /** ISO-8601 timestamp */
@@ -53,7 +54,6 @@ export interface LlmSentEntry extends BaseEntry {
   type: "llm.sent";
   /** Number of messages in the context sent */
   messageCount: number;
-  tokensInput: number;
 }
 
 export interface LlmResponseEntry extends BaseEntry {
@@ -112,7 +112,30 @@ export interface MatchEndEntry extends BaseEntry {
 
 export interface TurnMetricsEntry extends BaseEntry {
   type: "turn_metrics";
-  thinkingTimeMs: number;
-  totalThinkingTimeMs: number;
+  /** LLM API call duration — the "pure reflection time" (network + inference, no MCP overhead) */
+  llmLatencyMs: number;
+  /** MCP callTool() duration — infrastructure overhead, not reflection */
+  mcpLatencyMs: number;
+  /** Total wall time for the turn (LLM + MCP + minor overhead) */
+  turnDurationMs: number;
   turnNumber: number;
+}
+
+export interface MatchSummaryEntry extends BaseEntry {
+  type: "match.summary";
+  /** Total match wall time in ms */
+  matchDurationMs: number;
+  players: Array<{
+    playerId: string;
+    /** Number of turns this player took */
+    turns: number;
+    /** Sum of LLM API latencies (pure reflection time) */
+    totalLlmLatencyMs: number;
+    /** Average LLM latency per turn */
+    avgLlmLatencyMs: number;
+    totalTokensInput: number;
+    totalTokensOutput: number;
+    /** Convenience: input + output */
+    totalTokens: number;
+  }>;
 }

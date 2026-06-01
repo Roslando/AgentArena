@@ -18,7 +18,10 @@ interface PlayerState {
   name: string;
   provider: ReturnType<typeof createProvider>;
   retries: number;
-  totalThinkingTimeMs: number;
+  turnCount: number;
+  totalLlmLatencyMs: number;
+  totalTokensInput: number;
+  totalTokensOutput: number;
   lastMoves: LastMoveDetail[];
 }
 
@@ -45,7 +48,10 @@ export class MatchRunner {
         name: p.name,
         provider: createProvider(p.id, p.provider),
         retries: 0,
-        totalThinkingTimeMs: 0,
+        turnCount: 0,
+        totalLlmLatencyMs: 0,
+        totalTokensInput: 0,
+        totalTokensOutput: 0,
         lastMoves: [],
       });
     }
@@ -128,15 +134,14 @@ export class MatchRunner {
           history.push({ role: "user", content: `Turn ${turn}. Game state:\n${stateContent}` });
         }
 
-        // Send to LLM (Change 2: start thinking timer)
-        const turnStartTime = Date.now();
+        // Send to LLM — start high-resolution timer for latency tracking
+        const llmStartTime = performance.now();
         this.log.write({
           type: "llm.sent",
           t: new Date().toISOString(),
           matchId: this.config.matchId,
           playerId: player.id,
           messageCount: history.length,
-          tokensInput: 0,
         });
 
         let response: Awaited<ReturnType<LlmProvider["send"]>>;
@@ -168,18 +173,24 @@ export class MatchRunner {
           continue;
         }
 
-        const latency = Math.round(performance.now() - turnStartTime);
+        const llmLatencyMs = Math.round(performance.now() - llmStartTime);
         this.log.write({
           type: "llm.response",
           t: new Date().toISOString(),
           matchId: this.config.matchId,
           playerId: player.id,
-          content: response.content, // Change 6: pensée loggée
+          content: response.content,
           tokensInput: response.tokensInput,
           tokensOutput: response.tokensOutput,
           finishReason: response.finishReason,
-          latencyMs: latency,
+          latencyMs: llmLatencyMs,
         });
+
+        // Accumulate per-player stats
+        player.turnCount++;
+        player.totalLlmLatencyMs += llmLatencyMs;
+        player.totalTokensInput += response.tokensInput;
+        player.totalTokensOutput += response.tokensOutput;
 
         // Execute tool calls
         if (response.toolCalls.length > 0) {
@@ -199,7 +210,9 @@ export class MatchRunner {
               });
 
               try {
+                const mcpStart = performance.now();
                 const result = await this.mcp.callTool(tc.function.name, args);
+                const mcpLatencyMs = Math.round(performance.now() - mcpStart);
 
                 // Check if the MCP signals game over
                 const resultObj = result as Record<string, unknown> | undefined;
@@ -224,18 +237,14 @@ export class MatchRunner {
                   );
                 }
 
-                // Change 2: calculate thinking time
-                const turnEndTime = Date.now();
-                const thinkingTimeMs = turnEndTime - turnStartTime;
-                player.totalThinkingTimeMs += thinkingTimeMs;
-
                 this.log.write({
                   type: "turn_metrics",
                   t: new Date().toISOString(),
                   matchId: this.config.matchId,
                   playerId: player.id,
-                  thinkingTimeMs,
-                  totalThinkingTimeMs: player.totalThinkingTimeMs,
+                  llmLatencyMs,
+                  mcpLatencyMs,
+                  turnDurationMs: Math.round(performance.now() - llmStartTime),
                   turnNumber: turn,
                 });
 
@@ -367,6 +376,23 @@ export class MatchRunner {
     reason: string,
     winnerId_?: string,
   ): Promise<{ winnerId?: string; reason: string }> {
+    // Write per-player aggregated stats before the final match.end entry
+    this.log.write({
+      type: "match.summary",
+      t: new Date().toISOString(),
+      matchId: this.config.matchId,
+      matchDurationMs: Date.now() - this.startTime,
+      players: this.players.map((p) => ({
+        playerId: p.id,
+        turns: p.turnCount,
+        totalLlmLatencyMs: p.totalLlmLatencyMs,
+        avgLlmLatencyMs: p.turnCount > 0 ? Math.round(p.totalLlmLatencyMs / p.turnCount) : 0,
+        totalTokensInput: p.totalTokensInput,
+        totalTokensOutput: p.totalTokensOutput,
+        totalTokens: p.totalTokensInput + p.totalTokensOutput,
+      })),
+    });
+
     const entry: LogEntry = {
       type: "match.end",
       t: new Date().toISOString(),
