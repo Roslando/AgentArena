@@ -38,8 +38,11 @@ export class MatchRunner {
   private abortController = new AbortController();
   private startTime = 0;
 
-  constructor(private readonly config: MatchConfig) {
-    this.log = new MatchLogger(config.matchId);
+  constructor(
+    private readonly config: MatchConfig,
+    onLogEntry?: (entry: LogEntry) => void,
+  ) {
+    this.log = new MatchLogger(config.matchId, undefined, onLogEntry);
     this.mcp = new McpManager(config.mcpServer, this.log, config.matchId);
 
     for (const p of config.players) {
@@ -73,6 +76,12 @@ export class MatchRunner {
       type: "match.start",
       t: new Date().toISOString(),
       matchId: this.config.matchId,
+      players: this.config.players.map((p) => ({
+        id: p.id,
+        name: p.name,
+        providerType: p.provider.type,
+        model: p.provider.model,
+      })),
     });
 
     try {

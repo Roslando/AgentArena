@@ -102,6 +102,15 @@ export interface ForfeitEntry extends BaseEntry {
 
 export interface MatchStartEntry extends BaseEntry {
   type: "match.start";
+  /** Game identifier (e.g. "chess"), when known */
+  game?: string;
+  /** Sanitized player roster — no API keys — so the UI can show logos/names in live and replay */
+  players: Array<{
+    id: string;
+    name: string;
+    providerType: string;
+    model: string;
+  }>;
 }
 
 export interface MatchEndEntry extends BaseEntry {
