@@ -24,7 +24,7 @@ export function BoardView({ state }: { state: MatchState }) {
     <div className="flex flex-col items-center gap-3">
       <CapturedTray pieces={state.capturedByBlack} label="Black captured" />
 
-      <div className="w-[min(58vh,520px)] overflow-hidden rounded-xl shadow-2xl ring-1 ring-slate-700/60">
+      <div className="w-[min(88vw,58vh,520px)] overflow-hidden rounded-xl shadow-2xl ring-1 ring-slate-700/60">
         <Chessboard
           options={{
             position: state.fen,

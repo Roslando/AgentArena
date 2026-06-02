@@ -22,11 +22,15 @@ export function PlayerPanel({
   side: "left" | "right";
   isWinner: boolean;
 }) {
-  const align = side === "left" ? "items-start text-left" : "items-end text-right";
+  // On mobile both panels are centered & full-width; on desktop they hug the board edges.
+  const align =
+    side === "left"
+      ? "items-center text-center lg:items-start lg:text-left"
+      : "items-center text-center lg:items-end lg:text-right";
   const colorChip = player.color === "white" ? "♔ White" : "♚ Black";
 
   return (
-    <aside className={`flex w-72 shrink-0 flex-col gap-4 ${align}`}>
+    <aside className={`flex w-full max-w-sm shrink-0 flex-col gap-4 lg:w-72 ${align}`}>
       <div className={`flex items-center gap-3 ${side === "right" ? "flex-row-reverse" : ""}`}>
         <ProviderLogo provider={player.providerType} size={36} />
         <div className={side === "right" ? "text-right" : ""}>

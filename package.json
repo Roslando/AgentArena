@@ -1,7 +1,7 @@
 {
   "name": "agentarena",
   "private": true,
-  "workspaces": ["packages/types", "packages/engine", "packages/cli", "packages/game-chess", "packages/web"],
+  "workspaces": ["packages/types", "packages/engine", "packages/cli", "packages/game-chess", "packages/web", "packages/server"],
   "scripts": {
     "clean": "rm -rf packages/*/dist",
     "build": "bun run --filter=@agentarena/types build && bun run --filter=@agentarena/engine build && bun run --filter=@agentarena/game-chess build && bun run --filter=@agentarena/cli build",
