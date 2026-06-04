@@ -160,13 +160,15 @@ sequenceDiagram
 > Requires [Bun](https://bun.sh).
 
 ```bash
-bun install                 # 1. install
-cp .env.example .env        # 2. add the API keys you want to use
-bun run build               # 3. build everything (incl. the dashboard)
-bun run start               # 4. boots server + dashboard + match, opens your browser
+bun install                                              # 1. install
+cp .env.example .env                                     # 2. add the API keys you use
+cp agentarena.config.example.json agentarena.config.json # 3. set up your match
+bun run build                                            # 4. build (incl. the dashboard)
+bun run start                                            # 5. boots everything, opens your browser
 ```
 
 `bun run start` loads **`agentarena.config.json`** from the project root (or pass a path).
+The example config documents every field and marks what's optional.
 It serves the dashboard and the API on a single port (`:7070`), runs the match **live**, and
 opens `http://localhost:7070/?live=<matchId>`. Press `Ctrl+C` to stop.
 

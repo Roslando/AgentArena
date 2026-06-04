@@ -1,8 +1,34 @@
+import { useEffect, useState } from "react";
+import { useReducedMotion } from "../state/useReducedMotion";
+
 /** One overlaid profile on the radar (values already normalized to 0–100). */
 export interface RadarSeries {
   name: string;
   color: string;
   values: number[];
+}
+
+/** Eased 0→1 reveal so the profiles grow from the center on mount (skipped if reduced motion). */
+function useGrowProgress(): number {
+  const reduced = useReducedMotion();
+  const [progress, setProgress] = useState(reduced ? 1 : 0);
+
+  useEffect(() => {
+    if (reduced) {
+      setProgress(1);
+      return;
+    }
+    const DURATION = 650;
+    const start = performance.now();
+    let raf = requestAnimationFrame(function tick(now) {
+      const t = Math.min(1, (now - start) / DURATION);
+      setProgress(1 - (1 - t) ** 3); // easeOutCubic
+      if (t < 1) raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [reduced]);
+
+  return progress;
 }
 
 /**
@@ -20,6 +46,7 @@ export function RadarChart({
   series: RadarSeries[];
   size?: number;
 }) {
+  const progress = useGrowProgress();
   // Extra horizontal room so side labels (e.g. "Reliability") never clip,
   // while keeping the chart compact enough to leave the table room to breathe.
   const hpad = 56;
@@ -72,11 +99,11 @@ export function RadarChart({
         );
       })}
 
-      {/* overlaid profiles */}
+      {/* overlaid profiles — grown from the center via `progress` (0→1 on mount) */}
       {series.map((s) => (
         <g key={s.name}>
           <polygon
-            points={seriesPoints(s.values)}
+            points={seriesPoints(s.values.map((v) => v * progress))}
             fill={s.color}
             fillOpacity={0.15}
             stroke={s.color}
@@ -84,7 +111,7 @@ export function RadarChart({
             strokeLinejoin="round"
           />
           {s.values.map((v, i) => {
-            const p = at(i, (r * clamp(v)) / 100);
+            const p = at(i, (r * clamp(v * progress)) / 100);
             return <circle key={axes[i]} cx={p.x} cy={p.y} r={3} fill={s.color} />;
           })}
         </g>

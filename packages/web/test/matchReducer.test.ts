@@ -93,6 +93,22 @@ describe("matchReducer", () => {
     expect(final.players.every((p) => !p.thinking)).toBe(true);
   });
 
+  it("sets endReason only at match.end, not at the earlier game.over (report-ready signal)", () => {
+    const entries = loadFixture();
+    const gameOverIdx = entries.findIndex((e) => e.type === "game.over");
+    expect(gameOverIdx).toBeGreaterThan(-1);
+
+    // Folded through game.over: status is "over" but the match is NOT finalized yet —
+    // the end report must stay hidden so the radar doesn't animate toward changing values.
+    const atGameOver = foldEntries(initialMatchState(), entries, gameOverIdx + 1);
+    expect(atGameOver.status).toBe("over");
+    expect(atGameOver.endReason).toBeNull();
+
+    // Folded through match.end: endReason is set → the report is ready with final data.
+    const atEnd = foldEntries(initialMatchState(), entries, entries.length);
+    expect(atEnd.endReason).not.toBeNull();
+  });
+
   it("is pure — folding twice yields equal state (replay scrubbing safety)", () => {
     const entries = loadFixture();
     const a = foldEntries(initialMatchState(), entries, entries.length);

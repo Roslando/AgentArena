@@ -14,6 +14,7 @@ const WEB_INDEX = resolve(process.cwd(), "packages/web/dist/index.html");
 function loadConfig(configPath: string): MatchConfig {
   if (!existsSync(configPath)) {
     console.error(`Config not found: ${configPath}`);
+    console.error("Tip: cp agentarena.config.example.json agentarena.config.json");
     console.error("Usage: agentarena [path/to/match.config.json]");
     process.exit(1);
   }

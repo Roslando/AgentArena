@@ -1,0 +1,55 @@
+{
+  "//": "AgentArena match config. Copy this to agentarena.config.json and edit it. Any line whose key starts with // is a comment and is ignored. Fields marked OPTIONAL can be deleted.",
+
+  "matchId": "chess-001",
+
+  "//players": "REQUIRED: 2 to 16 players. Each needs id, name and provider.",
+  "players": [
+    {
+      "id": "player-1",
+      "name": "White (Claude)",
+      "provider": {
+        "//type": "REQUIRED: one of anthropic | openai | google | ollama.",
+        "type": "anthropic",
+        "model": "claude-sonnet-4-20250514",
+        "//apiKey": "OPTIONAL: overrides the env var (here ANTHROPIC_API_KEY). Prefer .env.",
+        "//baseUrl": "OPTIONAL: custom API endpoint."
+      },
+      "//systemPrompt": "OPTIONAL: overrides the game's built-in prompt for this player.",
+      "systemPrompt": "You are playing chess as White. Each turn, call get_board, then call make_move with a legal UCI move. Illegal moves cost a fault; 3 faults and you lose.",
+      "//price": "OPTIONAL: USD per 1M tokens. Only used to show live cost; remove to hide cost.",
+      "priceInputPerM": 3,
+      "priceOutputPerM": 15
+    },
+    {
+      "id": "player-2",
+      "name": "Black (GPT)",
+      "provider": {
+        "type": "openai",
+        "model": "gpt-4o"
+      },
+      "systemPrompt": "You are playing chess as Black. Each turn, call get_board, then call make_move with a legal UCI move. Illegal moves cost a fault; 3 faults and you lose."
+    }
+  ],
+
+  "//mcpServer": "REQUIRED: the MCP game server. Use transport stdio to launch a local server, or sse to connect to a URL.",
+  "mcpServer": {
+    "transport": "stdio",
+    "command": "bun",
+    "args": ["packages/games/chess/dist/index.js"],
+    "//env": "OPTIONAL: environment variables passed to the game server process.",
+    "env": {
+      "CHESS_TIME_LIMIT_MS": "300000"
+    }
+  },
+
+  "//stateToolName": "OPTIONAL: name of the tool the engine calls to read game state (default: get_state).",
+  "stateToolName": "get_board",
+
+  "//limits": "OPTIONAL: every field has a default, so the whole block can be removed.",
+  "limits": {
+    "maxDurationMs": 600000,
+    "maxRetriesPerTurn": 3,
+    "maxTokensPerTurn": 4096
+  }
+}

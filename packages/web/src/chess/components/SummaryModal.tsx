@@ -47,7 +47,11 @@ function reasonText(reason: string | null): string {
  * a radar of the head-to-head profile (shape) + a companion table (exact numbers).
  */
 export function SummaryModal({ state, onClose }: { state: MatchState; onClose: () => void }) {
-  if (state.status !== "over") return null;
+  // Wait for the terminal `match.end` — it sets winnerId + endReason and lands AFTER the
+  // final `match.summary`. `game.over` flips status to "over" two entries earlier, so
+  // rendering then would make the radar animate toward values that are still being
+  // finalized (the "shape morphing" before it settles). endReason is set only by match.end.
+  if (state.status !== "over" || state.endReason === null) return null;
   const a = state.players[0];
   const b = state.players[1];
   if (!a || !b) return null;
@@ -217,25 +221,37 @@ export function SummaryModal({ state, onClose }: { state: MatchState; onClose: (
               <div className="whitespace-nowrap pb-1 text-right font-mono text-[10px] uppercase tracking-wider text-[#A6A29A]">
                 {b.name}
               </div>
-              {rows.map((r) => (
-                <Fragment key={r.label}>
-                  <div className="whitespace-nowrap border-t border-[#ECE9E0] py-2 text-[#5b5852]">
-                    {r.label}
-                  </div>
-                  <div
-                    className="border-t border-[#ECE9E0] py-2 text-right tabular-nums"
-                    style={r.better === -1 ? { color: COLOR_A, fontWeight: 700 } : undefined}
-                  >
-                    {r.va}
-                  </div>
-                  <div
-                    className="border-t border-[#ECE9E0] py-2 text-right tabular-nums"
-                    style={r.better === 1 ? { color: COLOR_B, fontWeight: 700 } : undefined}
-                  >
-                    {r.vb}
-                  </div>
-                </Fragment>
-              ))}
+              {rows.map((r, i) => {
+                const delay = `${i * 60}ms`;
+                return (
+                  <Fragment key={r.label}>
+                    <div
+                      className="report-row-in whitespace-nowrap border-t border-[#ECE9E0] py-2 text-[#5b5852]"
+                      style={{ animationDelay: delay }}
+                    >
+                      {r.label}
+                    </div>
+                    <div
+                      className="report-row-in border-t border-[#ECE9E0] py-2 text-right tabular-nums"
+                      style={{
+                        animationDelay: delay,
+                        ...(r.better === -1 ? { color: COLOR_A, fontWeight: 700 } : {}),
+                      }}
+                    >
+                      {r.va}
+                    </div>
+                    <div
+                      className="report-row-in border-t border-[#ECE9E0] py-2 text-right tabular-nums"
+                      style={{
+                        animationDelay: delay,
+                        ...(r.better === 1 ? { color: COLOR_B, fontWeight: 700 } : {}),
+                      }}
+                    >
+                      {r.vb}
+                    </div>
+                  </Fragment>
+                );
+              })}
             </div>
           </div>
         </div>
