@@ -72,7 +72,9 @@ export default function App() {
           )}
         </div>
 
-        {right && <PlayerPanel player={right} side="right" isWinner={state.winnerId === right.id} />}
+        {right && (
+          <PlayerPanel player={right} side="right" isWinner={state.winnerId === right.id} />
+        )}
       </main>
 
       {showSummary && <SummaryModal state={state} onClose={() => setShowSummary(false)} />}
@@ -87,7 +89,8 @@ function EmptyHint({ isLive }: { isLive: boolean }) {
         "Connecting to live match…"
       ) : (
         <>
-          Load a match log (<code className="text-slate-400">logs/*.jsonl</code>) to begin the replay.
+          Load a match log (<code className="text-slate-400">logs/*.jsonl</code>) to begin the
+          replay.
         </>
       )}
     </div>

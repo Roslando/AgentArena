@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 64 64" fill="none" stroke="#2563EB" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="AgentArena">
+  <path d="M8 36 A24 20 0 0 1 56 36" />
+  <path d="M18 36 A15 12 0 0 1 46 36" />
+  <path d="M23 50 L32 23 L41 50" stroke-width="5" />
+  <path d="M26.8 40 H37.2" stroke-width="5" />
+</svg>

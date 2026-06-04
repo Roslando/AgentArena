@@ -6,19 +6,22 @@ import { z } from "zod";
 export const ProviderConfigSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("openai"),
-    apiKey: z.string(),
+    // Optional override; by default the key is read from OPENAI_API_KEY.
+    apiKey: z.string().optional(),
     model: z.string().default("gpt-4o"),
     baseUrl: z.string().optional(),
   }),
   z.object({
     type: z.literal("anthropic"),
-    apiKey: z.string(),
+    // Optional override; by default the key is read from ANTHROPIC_API_KEY.
+    apiKey: z.string().optional(),
     model: z.string().default("claude-sonnet-4-20250514"),
     baseUrl: z.string().optional(),
   }),
   z.object({
     type: z.literal("google"),
-    apiKey: z.string(),
+    // Optional override; by default the key is read from GOOGLE_API_KEY.
+    apiKey: z.string().optional(),
     model: z.string().default("gemini-2.0-flash"),
     baseUrl: z.string().optional(),
   }),

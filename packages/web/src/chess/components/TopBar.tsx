@@ -1,18 +1,7 @@
+import { materialOf } from "../state/metrics";
 import type { Color, MatchState, PlayerView } from "../state/types";
 import { BrandMark } from "./BrandMark";
 import { ProviderLogo } from "./ProviderLogo";
-
-/** Standard chess material values (king is never captured). */
-const PIECE_VALUE: Record<string, number> = {
-  pawn: 1,
-  knight: 3,
-  bishop: 3,
-  rook: 5,
-  queen: 9,
-};
-
-const materialOf = (pieces: string[]): number =>
-  pieces.reduce((sum, p) => sum + (PIECE_VALUE[p] ?? 0), 0);
 
 export function TopBar({
   state,

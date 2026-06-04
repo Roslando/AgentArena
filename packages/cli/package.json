@@ -15,5 +15,8 @@
   "dependencies": {
     "@agentarena/engine": "workspace:*",
     "@agentarena/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0"
   }
 }

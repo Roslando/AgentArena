@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { LogEntry } from "@agentarena/types";
 import { describe, expect, it } from "vitest";
-import { foldEntries, matchReducer } from "../src/state/matchReducer";
-import { initialMatchState, START_FEN } from "../src/state/types";
+import { foldEntries, matchReducer } from "../src/chess/state/matchReducer";
+import { initialMatchState, START_FEN } from "../src/chess/state/types";
 
 const FIXTURE = join(
   fileURLToPath(new URL(".", import.meta.url)),

@@ -31,10 +31,7 @@ export function useReplay(entries: LogEntry[]) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const total = entries.length;
-  const state = useMemo(
-    () => foldEntries(initialMatchState(), entries, cursor),
-    [entries, cursor],
-  );
+  const state = useMemo(() => foldEntries(initialMatchState(), entries, cursor), [entries, cursor]);
 
   // Reset when a new log is loaded
   useEffect(() => {
@@ -60,8 +57,6 @@ export function useReplay(entries: LogEntry[]) {
     total,
     playing,
     speed,
-    play: () => setPlaying(true),
-    pause: () => setPlaying(false),
     toggle: () => setPlaying((p) => !p),
     seek: (i: number) => {
       setPlaying(false);

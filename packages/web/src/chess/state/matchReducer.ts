@@ -197,11 +197,7 @@ function uciToSquares(uci: unknown): { from: string; to: string } | null {
 }
 
 /** Fold an entire entry sequence from scratch — used for replay scrubbing. */
-export function foldEntries(
-  initial: MatchState,
-  entries: LogEntry[],
-  upTo: number,
-): MatchState {
+export function foldEntries(initial: MatchState, entries: LogEntry[], upTo: number): MatchState {
   let state = initial;
   for (let i = 0; i < upTo && i < entries.length; i++) {
     const e = entries[i];

@@ -1,11 +1,14 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { MatchRunner } from "@agentarena/engine";
+import { MatchRunner, preflight } from "@agentarena/engine";
 import { type LogEntry, MatchConfigSchema } from "@agentarena/types";
 import type { ServerWebSocket } from "bun";
 
 const PORT = Number(process.env.PORT ?? 7070);
 const LOGS_DIR = process.env.LOGS_DIR ?? "logs";
+/** When enabled, the server also serves the built dashboard (single-port mode). */
+const SERVE_WEB = process.env.SERVE_WEB === "1";
+const WEB_DIST = process.env.WEB_DIST ?? "packages/web/dist";
 
 /** matchId -> set of subscribed sockets */
 const rooms = new Map<string, Set<ServerWebSocket<WsData>>>();
@@ -65,7 +68,9 @@ function json(body: unknown, status = 200): Response {
 async function streamSavedAsLive(matchId: string, fromId: string, stepMs: number): Promise<void> {
   const path = join(LOGS_DIR, `${fromId}.jsonl`);
   if (!existsSync(path)) return;
-  const lines = readFileSync(path, "utf-8").split("\n").filter((l) => l.trim());
+  const lines = readFileSync(path, "utf-8")
+    .split("\n")
+    .filter((l) => l.trim());
   for (const line of lines) {
     try {
       const entry = JSON.parse(line) as LogEntry;
@@ -77,89 +82,113 @@ async function streamSavedAsLive(matchId: string, fromId: string, stepMs: number
   }
 }
 
-const server = Bun.serve<WsData>({
-  port: PORT,
-  async fetch(req, srv) {
-    const url = new URL(req.url);
+/** Serve the built dashboard from WEB_DIST, falling back to index.html for SPA routes. */
+async function serveStatic(pathname: string): Promise<Response> {
+  const rel = pathname === "/" ? "/index.html" : pathname;
+  const file = Bun.file(join(WEB_DIST, rel));
+  if (await file.exists()) return new Response(file, { headers: CORS });
+  // SPA catch-all: unknown route → index.html (so /?live=... works on reload)
+  return new Response(Bun.file(join(WEB_DIST, "index.html")), { headers: CORS });
+}
 
-    if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
+export function startServer() {
+  const server = Bun.serve<WsData>({
+    port: PORT,
+    async fetch(req, srv) {
+      const url = new URL(req.url);
 
-    // WebSocket upgrade: /ws?matchId=...
-    if (url.pathname === "/ws") {
-      const matchId = url.searchParams.get("matchId") ?? "";
-      if (srv.upgrade(req, { data: { matchId } })) return undefined;
-      return new Response("WebSocket upgrade failed", { status: 400 });
-    }
+      if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
-    // List saved logs
-    if (url.pathname === "/api/logs" && req.method === "GET") {
-      if (!existsSync(LOGS_DIR)) return json([]);
-      const items = readdirSync(LOGS_DIR)
-        .filter((f) => f.endsWith(".jsonl"))
-        .map((f) => {
-          const s = statSync(join(LOGS_DIR, f));
-          return { id: f.replace(/\.jsonl$/, ""), bytes: s.size, mtime: s.mtimeMs };
-        })
-        .sort((a, b) => b.mtime - a.mtime);
-      return json(items);
-    }
+      // WebSocket upgrade: /ws?matchId=...
+      if (url.pathname === "/ws") {
+        const matchId = url.searchParams.get("matchId") ?? "";
+        if (srv.upgrade(req, { data: { matchId } })) return undefined;
+        return new Response("WebSocket upgrade failed", { status: 400 });
+      }
 
-    // Fetch one saved log (raw jsonl) for replay
-    const logMatch = url.pathname.match(/^\/api\/logs\/(.+)$/);
-    if (logMatch && req.method === "GET") {
-      const id = decodeURIComponent(logMatch[1] as string);
-      const path = join(LOGS_DIR, `${id}.jsonl`);
-      if (!existsSync(path)) return json({ error: "not found" }, 404);
-      return new Response(readFileSync(path, "utf-8"), {
-        headers: { "Content-Type": "application/x-ndjson", ...CORS },
-      });
-    }
+      // List saved logs
+      if (url.pathname === "/api/logs" && req.method === "GET") {
+        if (!existsSync(LOGS_DIR)) return json([]);
+        const items = readdirSync(LOGS_DIR)
+          .filter((f) => f.endsWith(".jsonl"))
+          .map((f) => {
+            const s = statSync(join(LOGS_DIR, f));
+            return { id: f.replace(/\.jsonl$/, ""), bytes: s.size, mtime: s.mtimeMs };
+          })
+          .sort((a, b) => b.mtime - a.mtime);
+        return json(items);
+      }
 
-    // Start a real match — body is a MatchConfig (with API keys). Broadcasts live.
-    if (url.pathname === "/api/matches" && req.method === "POST") {
-      const parsed = MatchConfigSchema.safeParse(await req.json().catch(() => null));
-      if (!parsed.success) return json({ error: "invalid config", issues: parsed.error.issues }, 400);
-      const config = parsed.data;
-      const runner = new MatchRunner(config, (entry) => broadcast(config.matchId, entry));
-      // Fire-and-forget: the client watches progress over WebSocket
-      runner.run().catch((err) => {
-        broadcast(config.matchId, {
-          type: "mcp.error",
-          t: new Date().toISOString(),
-          matchId: config.matchId,
-          message: err instanceof Error ? err.message : String(err),
+      // Fetch one saved log (raw jsonl) for replay
+      const logMatch = url.pathname.match(/^\/api\/logs\/(.+)$/);
+      if (logMatch && req.method === "GET") {
+        const id = decodeURIComponent(logMatch[1] as string);
+        const path = join(LOGS_DIR, `${id}.jsonl`);
+        if (!existsSync(path)) return json({ error: "not found" }, 404);
+        return new Response(readFileSync(path, "utf-8"), {
+          headers: { "Content-Type": "application/x-ndjson", ...CORS },
         });
-      });
-      return json({ matchId: config.matchId, watch: `/ws?matchId=${config.matchId}` });
-    }
+      }
 
-    // Replay a saved log AS live (key-free demo of the WebSocket path)
-    if (url.pathname === "/api/replay-as-live" && req.method === "POST") {
-      const body = (await req.json().catch(() => ({}))) as { id?: string; stepMs?: number };
-      const fromId = body.id ?? "sample-foolsmate";
-      const matchId = `live-${fromId}`;
-      const stepMs = body.stepMs ?? 600;
-      void streamSavedAsLive(matchId, fromId, stepMs);
-      return json({ matchId, watch: `/ws?matchId=${matchId}` });
-    }
+      // Start a real match — body is a MatchConfig (with API keys). Broadcasts live.
+      if (url.pathname === "/api/matches" && req.method === "POST") {
+        const parsed = MatchConfigSchema.safeParse(await req.json().catch(() => null));
+        if (!parsed.success)
+          return json({ error: "invalid config", issues: parsed.error.issues }, 400);
+        const config = parsed.data;
+        const problems = preflight(config);
+        if (problems.length > 0) return json({ error: "preflight failed", problems }, 400);
+        const runner = new MatchRunner(config, (entry) => broadcast(config.matchId, entry));
+        // Fire-and-forget: the client watches progress over WebSocket
+        runner.run().catch((err) => {
+          broadcast(config.matchId, {
+            type: "mcp.error",
+            t: new Date().toISOString(),
+            matchId: config.matchId,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        });
+        return json({ matchId: config.matchId, watch: `/ws?matchId=${config.matchId}` });
+      }
 
-    return new Response("AgentArena server", { headers: CORS });
-  },
+      // Replay a saved log AS live (key-free demo of the WebSocket path)
+      if (url.pathname === "/api/replay-as-live" && req.method === "POST") {
+        const body = (await req.json().catch(() => ({}))) as { id?: string; stepMs?: number };
+        const fromId = body.id ?? "sample-foolsmate";
+        const matchId = `live-${fromId}`;
+        const stepMs = body.stepMs ?? 600;
+        void streamSavedAsLive(matchId, fromId, stepMs);
+        return json({ matchId, watch: `/ws?matchId=${matchId}` });
+      }
 
-  websocket: {
-    open(ws) {
-      subscribe(ws.data.matchId, ws);
-      // Catch the new viewer up with everything broadcast so far
-      const buffer = history.get(ws.data.matchId);
-      if (buffer) for (const entry of buffer) ws.send(JSON.stringify(entry));
+      // Single-port mode: serve the built dashboard for any other GET.
+      if (SERVE_WEB && req.method === "GET") return serveStatic(url.pathname);
+
+      return new Response("AgentArena server", { headers: CORS });
     },
-    close(ws) {
-      unsubscribe(ws.data.matchId, ws);
-    },
-    message() {
-      // clients are listeners only
-    },
-  },
-});
 
-console.log(`AgentArena server on http://localhost:${server.port}  (logs: ${LOGS_DIR})`);
+    websocket: {
+      open(ws) {
+        subscribe(ws.data.matchId, ws);
+        // Catch the new viewer up with everything broadcast so far
+        const buffer = history.get(ws.data.matchId);
+        if (buffer) for (const entry of buffer) ws.send(JSON.stringify(entry));
+      },
+      close(ws) {
+        unsubscribe(ws.data.matchId, ws);
+      },
+      message() {
+        // clients are listeners only
+      },
+    },
+  });
+
+  console.log(
+    `AgentArena server on http://localhost:${server.port}  (logs: ${LOGS_DIR}${
+      SERVE_WEB ? `, web: ${WEB_DIST}` : ""
+    })`,
+  );
+  return server;
+}
+
+if (import.meta.main) startServer();

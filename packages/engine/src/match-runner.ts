@@ -101,6 +101,20 @@ export class MatchRunner {
     try {
       await this.mcp.connect();
 
+      // Preflight: the configured state tool must exist and the server must
+      // expose at least one action tool — fail fast before spending any tokens.
+      const toolNames = this.mcp.tools.map((t) => t.name);
+      if (!toolNames.includes(this.config.stateToolName)) {
+        throw new Error(
+          `MCP server exposes no "${this.config.stateToolName}" tool (stateToolName). Available: ${toolNames.join(", ") || "none"}`,
+        );
+      }
+      if (toolNames.length < 2) {
+        throw new Error(
+          `MCP server exposes no action tool besides "${this.config.stateToolName}".`,
+        );
+      }
+
       // Build tool definitions for the LLMs
       const toolDefs: ToolDefinition[] = this.mcp.tools.map((t) => ({
         type: "function",

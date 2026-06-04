@@ -6,25 +6,43 @@ import { OpenAiProvider } from "./openai.js";
 
 export type ProviderFactory = (id: string, config: ProviderConfig) => LlmProvider;
 
+/** Environment variable holding the API key for each key-based provider. */
+export const ENV_KEY_BY_TYPE: Record<"openai" | "anthropic" | "google", string> = {
+  openai: "OPENAI_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+  google: "GOOGLE_API_KEY",
+};
+
+/**
+ * Resolve the API key for a provider: explicit `apiKey` in config wins,
+ * otherwise fall back to the matching environment variable (Bun auto-loads .env).
+ * Returns undefined for ollama (no key) or when nothing is set.
+ */
+export function resolveApiKey(config: ProviderConfig): string | undefined {
+  if (config.type === "ollama") return undefined;
+  const fromConfig = (config as { apiKey?: string }).apiKey;
+  return fromConfig ?? process.env[ENV_KEY_BY_TYPE[config.type]];
+}
+
 const registry: Record<string, ProviderFactory> = {
   openai: (id, cfg) =>
     new OpenAiProvider(
       id,
-      (cfg as { apiKey: string }).apiKey,
+      resolveApiKey(cfg) ?? "",
       cfg.model,
       (cfg as { baseUrl?: string }).baseUrl,
     ),
   anthropic: (id, cfg) =>
     new AnthropicProvider(
       id,
-      (cfg as { apiKey: string }).apiKey,
+      resolveApiKey(cfg) ?? "",
       cfg.model,
       (cfg as { baseUrl?: string }).baseUrl,
     ),
   google: (id, cfg) =>
     new GoogleProvider(
       id,
-      (cfg as { apiKey: string }).apiKey,
+      resolveApiKey(cfg) ?? "",
       cfg.model,
       (cfg as { baseUrl?: string }).baseUrl,
     ),

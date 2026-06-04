@@ -21,6 +21,9 @@
         "@agentarena/engine": "workspace:*",
         "@agentarena/types": "workspace:*",
       },
+      "devDependencies": {
+        "@types/bun": "^1.1.0",
+      },
     },
     "packages/engine": {
       "name": "@agentarena/engine",
@@ -33,7 +36,7 @@
         "zod": "^3.24.0",
       },
     },
-    "packages/game-chess": {
+    "packages/games/chess": {
       "name": "@agentarena/game-chess",
       "version": "0.1.0",
       "dependencies": {
@@ -90,7 +93,7 @@
 
     "@agentarena/engine": ["@agentarena/engine@workspace:packages/engine"],
 
-    "@agentarena/game-chess": ["@agentarena/game-chess@workspace:packages/game-chess"],
+    "@agentarena/game-chess": ["@agentarena/game-chess@workspace:packages/games/chess"],
 
     "@agentarena/server": ["@agentarena/server@workspace:packages/server"],
 
