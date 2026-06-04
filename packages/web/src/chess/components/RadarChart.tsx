@@ -65,10 +65,18 @@ export function RadarChart({
   const ringPoints = (f: number) =>
     axes.map((_, i) => `${at(i, r * f).x},${at(i, r * f).y}`).join(" ");
   const seriesPoints = (values: number[]) =>
-    values.map((v, i) => `${at(i, (r * clamp(v)) / 100).x},${at(i, (r * clamp(v)) / 100).y}`).join(" ");
+    values
+      .map((v, i) => `${at(i, (r * clamp(v)) / 100).x},${at(i, (r * clamp(v)) / 100).y}`)
+      .join(" ");
 
   return (
-    <svg viewBox={`0 0 ${w} ${size}`} width={w} height={size} role="img" aria-label="Profile comparison">
+    <svg
+      viewBox={`0 0 ${w} ${size}`}
+      width={w}
+      height={size}
+      role="img"
+      aria-label="Profile comparison"
+    >
       {/* concentric reference rings */}
       {[0.25, 0.5, 0.75, 1].map((f) => (
         <polygon key={f} points={ringPoints(f)} fill="none" stroke="#DEDBD1" strokeWidth={1} />

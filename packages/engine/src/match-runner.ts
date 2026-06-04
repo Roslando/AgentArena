@@ -273,11 +273,10 @@ export class MatchRunner {
                     content: response.content,
                   });
 
-                  const rawWinnerId = (resultObj?.winner_id ?? resultObj?.winnerId) as string | undefined;
-                  return await this.endMatch(
-                    "game_over",
-                    this.mapGameWinner(rawWinnerId),
-                  );
+                  const rawWinnerId = (resultObj?.winner_id ?? resultObj?.winnerId) as
+                    | string
+                    | undefined;
+                  return await this.endMatch("game_over", this.mapGameWinner(rawWinnerId));
                 }
 
                 // Illegal move — fault incremented by the game server, but turn is NOT over.
@@ -289,7 +288,10 @@ export class MatchRunner {
                   attempt++;
                   if (attempt >= this.config.limits.maxRetriesPerTurn) {
                     // Safety cap — in practice the game server forfeits at 3 faults first
-                    return await this.endMatch("forfeit", this.getNextPlayer(currentPlayerIndex)?.id);
+                    return await this.endMatch(
+                      "forfeit",
+                      this.getNextPlayer(currentPlayerIndex)?.id,
+                    );
                   }
 
                   history.push({ role: "assistant", content: response.content });
@@ -568,7 +570,7 @@ function formatBoardMessage(
     msg += `\n\nYour recent moves: ${recentMoves.map((m) => m.san).join(", ")}.`;
   }
   if (recentNotes.length > 0) {
-    msg += `\nYour recent notes (oldest first):`;
+    msg += "\nYour recent notes (oldest first):";
     for (const n of recentNotes) msg += `\n- ${n}`;
   }
 
@@ -593,21 +595,21 @@ function formatLastLine(san: string, detail: LastMoveDetail, advColor: string): 
   let line = `Last: ${san} (${advColor}: ${detail.piece} ${detail.from}→${detail.to}`;
 
   if (isCastling) {
-    line += `, castling`;
+    line += ", castling";
   } else {
     if (isCapture) {
       line += ` takes ${detail.captured}`;
-      if (isEnPassant) line += ` en passant`;
+      if (isEnPassant) line += " en passant";
     }
     if (isPromotion) {
       line += `, promotes to ${detail.promotion}`;
     }
     if (detail.isCheck) {
-      line += `, check`;
+      line += ", check";
     }
   }
 
-  line += `)`;
+  line += ")";
   return line;
 }
 

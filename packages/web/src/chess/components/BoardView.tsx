@@ -48,6 +48,7 @@ function CapturedTray({ pieces, label }: { pieces: string[]; label: string }) {
   return (
     <div className="flex h-7 items-center gap-0.5 text-xl text-slate-300" aria-label={label}>
       {pieces.map((p, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: captured pieces are append-only and never reordered, so the index is a stable key.
         <span key={`${p}-${i}`}>{PIECE_GLYPH[p] ?? "?"}</span>
       ))}
     </div>

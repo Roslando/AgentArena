@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Logs
+*.log
+
+# Secrets / environment
+.env
+.env.local
+
+# Your real match config (copy from agentarena.config.example.json).
+agentarena.config.json
+# Local-only match configs (use *.local.json if a config must hold secrets).
+*.local.json
+
+# Test / coverage output
+coverage/
+
+# Editors / IDE
+.vscode/
+.idea/
+*.swp
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Internal AI dev notes (kept out of the public repo)
+PROJET_MEMORY.md
+CLAUDE.md
+.CLAUDE

@@ -14,13 +14,12 @@ body,
 }
 
 body {
-  font-family:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
   color: #e2e8f0;
   /* Blue-tinted dark base (never pure black) + a soft broadcast "spotlight"
      glow behind the board. Light is the depth cue in dark UI. */
-  background:
-    radial-gradient(1100px 520px at 50% -8%, rgba(56, 99, 180, 0.2), transparent 60%),
+  background: radial-gradient(1100px 520px at 50% -8%, rgba(56, 99, 180, 0.2), transparent 60%),
     linear-gradient(180deg, #0b1224 0%, #070b16 100%);
   background-attachment: fixed;
 }

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { LogEntry } from "@agentarena/types";
 import { describe, expect, it } from "vitest";
 import { foldEntries, matchReducer } from "../src/chess/state/matchReducer";
-import { initialMatchState, START_FEN } from "../src/chess/state/types";
+import { START_FEN, initialMatchState } from "../src/chess/state/types";
 
 const FIXTURE = join(
   fileURLToPath(new URL(".", import.meta.url)),

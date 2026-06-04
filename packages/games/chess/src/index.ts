@@ -159,11 +159,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       faults_total: state.faults[yourColor],
       forfeit: false,
       game_over: result.gameOver,
-      result: result.gameOver
-        ? result.winner
-          ? `${result.winner} wins`
-          : "draw"
-        : null,
+      result: result.gameOver ? (result.winner ? `${result.winner} wins` : "draw") : null,
       message: `Move played: ${result.san}`,
     };
 

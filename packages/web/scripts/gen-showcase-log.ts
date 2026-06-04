@@ -34,10 +34,39 @@ const PLAYERS = [
 
 // SAN, alternating white/black.
 const MOVES = [
-  "e4", "e5", "Nf3", "d6", "d4", "Bg4", "dxe5", "Bxf3", "Qxf3", "dxe5",
-  "Bc4", "Nf6", "Qb3", "Qe7", "Nc3", "c6", "Bg5", "b5", "Nxb5", "cxb5",
-  "Bxb5+", "Nbd7", "O-O-O", "Rd8", "Rxd7", "Rxd7", "Rd1", "Qe6", "Bxd7+", "Nxd7",
-  "Qb8+", "Nxb8", "Rd8#",
+  "e4",
+  "e5",
+  "Nf3",
+  "d6",
+  "d4",
+  "Bg4",
+  "dxe5",
+  "Bxf3",
+  "Qxf3",
+  "dxe5",
+  "Bc4",
+  "Nf6",
+  "Qb3",
+  "Qe7",
+  "Nc3",
+  "c6",
+  "Bg5",
+  "b5",
+  "Nxb5",
+  "cxb5",
+  "Bxb5+",
+  "Nbd7",
+  "O-O-O",
+  "Rd8",
+  "Rxd7",
+  "Rxd7",
+  "Rd1",
+  "Qe6",
+  "Bxd7+",
+  "Nxd7",
+  "Qb8+",
+  "Nxb8",
+  "Rd8#",
 ];
 
 const REASONING = [
@@ -97,7 +126,10 @@ const PIECE = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "
 const named = (c: string) => PIECE[c as keyof typeof PIECE] ?? c;
 
 // Running per-player stats (mirrors MatchRunner accumulation).
-const stats: Record<string, { turns: number; tokIn: number; tokOut: number; llm: number; resp: number }> = {
+const stats: Record<
+  string,
+  { turns: number; tokIn: number; tokOut: number; llm: number; resp: number }
+> = {
   white: { turns: 0, tokIn: 0, tokOut: 0, llm: 0, resp: 0 },
   black: { turns: 0, tokIn: 0, tokOut: 0, llm: 0, resp: 0 },
 };
@@ -141,7 +173,9 @@ for (let i = 0; i < MOVES.length; i++) {
     you_are: mover,
     turn: mover,
     last_move_san: lastVerbose?.san ?? null,
-    last_move_uci: lastVerbose ? `${lastVerbose.from}${lastVerbose.to}${lastVerbose.promotion ?? ""}` : null,
+    last_move_uci: lastVerbose
+      ? `${lastVerbose.from}${lastVerbose.to}${lastVerbose.promotion ?? ""}`
+      : null,
     captured_by_you: losses[mover], // server convention: your own losses
     captured_by_opponent: losses[opponent],
     check: chess.isCheck(),
@@ -289,7 +323,13 @@ push({
   matchDurationMs: clock * 1000,
   players: summaryPlayers,
 });
-push({ type: "match.end", t: t(clock++), matchId: MATCH_ID, reason: "checkmate", winnerId: "white" });
+push({
+  type: "match.end",
+  t: t(clock++),
+  matchId: MATCH_ID,
+  reason: "checkmate",
+  winnerId: "white",
+});
 
 const out = `${lines.join("\n")}\n`;
 mkdirSync("logs", { recursive: true });

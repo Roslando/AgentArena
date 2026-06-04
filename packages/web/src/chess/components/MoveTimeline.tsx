@@ -93,7 +93,17 @@ function PauseIcon() {
 /** Down-into-tray = "load a file from disk" (import), distinct from a share/export glyph. */
 function ImportIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M8 2.5V9.5M5 6.5l3 3 3-3" />
       <path d="M2.5 10.5v1.5a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-1.5" />
     </svg>

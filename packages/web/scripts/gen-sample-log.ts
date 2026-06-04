@@ -49,7 +49,9 @@ for (let i = 0; i < MOVES.length; i++) {
     you_are: mover,
     turn: mover,
     last_move_san: lastVerbose?.san ?? null,
-    last_move_uci: lastVerbose ? `${lastVerbose.from}${lastVerbose.to}${lastVerbose.promotion ?? ""}` : null,
+    last_move_uci: lastVerbose
+      ? `${lastVerbose.from}${lastVerbose.to}${lastVerbose.promotion ?? ""}`
+      : null,
     captured_by_you: captured[mover],
     captured_by_opponent: captured[opponent],
     check: before.isCheck(),
@@ -177,7 +179,13 @@ push({
   matchDurationMs: clock * 1000,
   players: summaryPlayers,
 });
-push({ type: "match.end", t: t(clock++), matchId: MATCH_ID, reason: "game_over", winnerId: "black" });
+push({
+  type: "match.end",
+  t: t(clock++),
+  matchId: MATCH_ID,
+  reason: "game_over",
+  winnerId: "black",
+});
 
 // Write to both the repo logs/ dir and the web public/ dir (so the dev server can fetch it)
 const out = `${lines.join("\n")}\n`;

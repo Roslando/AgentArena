@@ -211,5 +211,4 @@ describe("ChessGame", () => {
       expect(state.inCheck).toBe(false);
     });
   });
-
-  });
+});

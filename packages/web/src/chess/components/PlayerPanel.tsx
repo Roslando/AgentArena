@@ -38,9 +38,7 @@ export function PlayerPanel({
       <div className={`flex items-center gap-2.5 ${side === "right" ? "flex-row-reverse" : ""}`}>
         <span
           className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-            player.color === "white"
-              ? "bg-sky-500/15 text-sky-300"
-              : "bg-rose-500/15 text-rose-300"
+            player.color === "white" ? "bg-sky-500/15 text-sky-300" : "bg-rose-500/15 text-rose-300"
           }`}
         >
           {colorChip}
