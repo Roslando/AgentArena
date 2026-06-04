@@ -18,7 +18,9 @@ const server = new Server(
 const CHESS_SYSTEM_PROMPT =
   "You are a professional chess player playing a match.\n" +
   "Analyze the current board state and decide your next move.\n" +
-  "Output your decision in one short sentence, then call the move tool.\n" +
+  "In one short sentence, state your move AND your short-term plan (your intention), " +
+  "then call the move tool. This note is shown back to you next turn, so make it " +
+  "useful to your future self.\n" +
   "No lists. No JSON. No long explanations.";
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({

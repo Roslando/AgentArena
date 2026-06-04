@@ -17,13 +17,15 @@ export function matchReducer(prev: MatchState, entry: LogEntry): MatchState {
         model: p.model,
         color: i === 0 ? "white" : "black",
         thinking: false,
-        reasoning: "",
+        messages: [],
         turns: 0,
         tokensInput: 0,
         tokensOutput: 0,
         totalLlmLatencyMs: 0,
         avgLlmLatencyMs: 0,
         faults: 0,
+        ...(p.priceInputPerM !== undefined ? { priceInputPerM: p.priceInputPerM } : {}),
+        ...(p.priceOutputPerM !== undefined ? { priceOutputPerM: p.priceOutputPerM } : {}),
       }));
       return {
         ...prev,
@@ -52,7 +54,7 @@ export function matchReducer(prev: MatchState, entry: LogEntry): MatchState {
         return {
           ...p,
           thinking: false,
-          reasoning: entry.content,
+          messages: [...p.messages, { turn: turns, text: entry.content }],
           turns,
           tokensInput: p.tokensInput + entry.tokensInput,
           tokensOutput: p.tokensOutput + entry.tokensOutput,

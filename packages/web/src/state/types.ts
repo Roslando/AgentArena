@@ -1,5 +1,11 @@
 export type Color = "white" | "black";
 
+/** One LLM utterance, rendered as a chat bubble. */
+export interface ChatMessage {
+  turn: number;
+  text: string;
+}
+
 export interface PlayerView {
   id: string;
   name: string;
@@ -8,8 +14,8 @@ export interface PlayerView {
   color: Color;
   /** true between llm.sent and llm.response */
   thinking: boolean;
-  /** latest reasoning text from llm.response.content */
-  reasoning: string;
+  /** chat thread of reasoning texts, oldest first */
+  messages: ChatMessage[];
   // running stats
   turns: number;
   tokensInput: number;
@@ -17,6 +23,10 @@ export interface PlayerView {
   totalLlmLatencyMs: number;
   avgLlmLatencyMs: number;
   faults: number;
+  /** USD price per 1M input tokens, when configured (for live cost display). */
+  priceInputPerM?: number;
+  /** USD price per 1M output tokens, when configured (for live cost display). */
+  priceOutputPerM?: number;
 }
 
 export interface MoveRecord {

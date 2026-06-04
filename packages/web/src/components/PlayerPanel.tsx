@@ -1,18 +1,9 @@
+import { costUsd, fmtTokens, fmtUsd } from "../state/metrics";
 import type { PlayerView } from "../state/types";
+import { ChatThread } from "./ChatThread";
 import { ProviderLogo } from "./ProviderLogo";
-import { ReasoningBubble } from "./ReasoningBubble";
-import { StatBadge } from "./StatBadge";
 
-function fmtMs(ms: number): string {
-  if (ms <= 0) return "—";
-  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
-}
-
-function fmtTokens(n: number): string {
-  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-}
-
-/** One side of the broadcast: identity, live reasoning, and running stats. */
+/** One side of the broadcast: identity, color, and the live reasoning thread. */
 export function PlayerPanel({
   player,
   side,
@@ -28,11 +19,13 @@ export function PlayerPanel({
       ? "items-center text-center lg:items-start lg:text-left"
       : "items-center text-center lg:items-end lg:text-right";
   const colorChip = player.color === "white" ? "♔ White" : "♚ Black";
+  const cost = costUsd(player);
+  const totalTokens = player.tokensInput + player.tokensOutput;
 
   return (
     <aside className={`flex w-full max-w-sm shrink-0 flex-col gap-4 lg:w-72 ${align}`}>
       <div className={`flex items-center gap-3 ${side === "right" ? "flex-row-reverse" : ""}`}>
-        <ProviderLogo provider={player.providerType} size={36} />
+        <ProviderLogo provider={player.providerType} model={player.model} size={36} />
         <div className={side === "right" ? "text-right" : ""}>
           <div className="flex items-center gap-2 font-semibold text-slate-100">
             {player.name}
@@ -42,34 +35,29 @@ export function PlayerPanel({
         </div>
       </div>
 
-      <div
-        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-          player.color === "white"
-            ? "bg-sky-500/15 text-sky-300"
-            : "bg-rose-500/15 text-rose-300"
-        }`}
-      >
-        {colorChip}
+      <div className={`flex items-center gap-2.5 ${side === "right" ? "flex-row-reverse" : ""}`}>
+        <span
+          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+            player.color === "white"
+              ? "bg-sky-500/15 text-sky-300"
+              : "bg-rose-500/15 text-rose-300"
+          }`}
+        >
+          {colorChip}
+        </span>
+        <span className="font-mono text-xs tabular-nums text-slate-400">
+          {cost !== null && <span className="text-emerald-300">{fmtUsd(cost)}</span>}
+          {cost !== null && <span className="text-slate-600"> · </span>}
+          {fmtTokens(totalTokens)} tok
+        </span>
       </div>
 
-      <div className="w-full">
-        <ReasoningBubble text={player.reasoning} thinking={player.thinking} color={player.color} />
-      </div>
-
-      <div className="flex w-full flex-col gap-2">
-        <StatBadge icon="⏱" label="avg reflection" value={fmtMs(player.avgLlmLatencyMs)} />
-        <StatBadge
-          icon="🔢"
-          label="tokens"
-          value={fmtTokens(player.tokensInput + player.tokensOutput)}
-        />
-        <StatBadge
-          icon="⚠"
-          label="faults"
-          value={`${player.faults}/3`}
-          warn={player.faults > 0}
-        />
-      </div>
+      <ChatThread
+        messages={player.messages}
+        thinking={player.thinking}
+        color={player.color}
+        side={side}
+      />
     </aside>
   );
 }

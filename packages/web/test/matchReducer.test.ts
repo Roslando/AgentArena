@@ -33,7 +33,7 @@ describe("matchReducer", () => {
     expect(state.fen).toBe(START_FEN);
   });
 
-  it("marks a player thinking on llm.sent and stores reasoning on llm.response", () => {
+  it("marks a player thinking on llm.sent and appends a chat message on llm.response", () => {
     const entries = loadFixture();
     // entry[1] = first get_board, entry[2] = llm.sent (white), entry[3] = llm.response
     const thinking = foldEntries(initialMatchState(), entries, 3);
@@ -41,9 +41,19 @@ describe("matchReducer", () => {
 
     const answered = foldEntries(initialMatchState(), entries, 4);
     expect(answered.players[0]?.thinking).toBe(false);
-    expect(answered.players[0]?.reasoning).toContain("f3");
+    expect(answered.players[0]?.messages).toHaveLength(1);
+    expect(answered.players[0]?.messages[0]?.text).toContain("f3");
+    expect(answered.players[0]?.messages[0]?.turn).toBe(1);
     expect(answered.players[0]?.turns).toBe(1);
     expect(answered.players[0]?.tokensOutput).toBeGreaterThan(0);
+  });
+
+  it("stacks every reasoning turn into the chat thread, oldest first", () => {
+    const entries = loadFixture();
+    const final = foldEntries(initialMatchState(), entries, entries.length);
+    // White played twice (f3, g4) → two messages, in order.
+    expect(final.players[0]?.messages.map((m) => m.turn)).toEqual([1, 2]);
+    expect(final.players[0]?.messages).toHaveLength(2);
   });
 
   it("updates the board FEN from get_board tool results", () => {

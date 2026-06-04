@@ -110,6 +110,10 @@ export interface MatchStartEntry extends BaseEntry {
     name: string;
     providerType: string;
     model: string;
+    /** USD price per 1M input tokens, when configured (for live cost display) */
+    priceInputPerM?: number;
+    /** USD price per 1M output tokens, when configured (for live cost display) */
+    priceOutputPerM?: number;
   }>;
 }
 

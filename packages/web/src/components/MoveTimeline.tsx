@@ -1,8 +1,5 @@
-import type { MoveRecord } from "../state/types";
-
-/** Bottom strip: SAN move history + replay transport controls. */
+/** Floating glass "pill" transport: a slim seek bar under the board (replay only). */
 export function MoveTimeline({
-  moves,
   cursor,
   total,
   playing,
@@ -10,8 +7,8 @@ export function MoveTimeline({
   onToggle,
   onSeek,
   onSpeed,
+  onLoad,
 }: {
-  moves: MoveRecord[];
   cursor: number;
   total: number;
   playing: boolean;
@@ -19,40 +16,18 @@ export function MoveTimeline({
   onToggle: () => void;
   onSeek: (i: number) => void;
   onSpeed: (s: number) => void;
+  onLoad: (raw: string) => void;
 }) {
-  // Group plies into numbered pairs: "1. e4 e5"
-  const pairs: { n: number; white?: string; black?: string }[] = [];
-  for (const m of moves) {
-    const n = Math.ceil(m.ply / 2);
-    let pair = pairs[pairs.length - 1];
-    if (!pair || pair.n !== n) {
-      pair = { n };
-      pairs.push(pair);
-    }
-    if (m.color === "white") pair.white = m.san;
-    else pair.black = m.san;
-  }
-
   return (
-    <div className="flex items-center gap-4 border-t border-slate-800 bg-slate-950/80 px-5 py-3">
+    <div className="flex w-[min(88vw,52vh,500px)] items-center gap-3 rounded-full border border-white/10 bg-slate-900/55 px-3 py-2 shadow-lg backdrop-blur-md">
       <button
         type="button"
         onClick={onToggle}
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-500 text-slate-950 hover:bg-sky-400"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-sky-500 text-slate-950 transition hover:bg-sky-400"
         aria-label={playing ? "Pause" : "Play"}
       >
-        {playing ? "❚❚" : "▶"}
+        {playing ? <PauseIcon /> : <PlayIcon />}
       </button>
-
-      <div className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto whitespace-nowrap text-sm">
-        {pairs.length === 0 && <span className="text-slate-600">No moves yet</span>}
-        {pairs.map((p) => (
-          <span key={p.n} className="text-slate-300">
-            <span className="text-slate-600">{p.n}.</span> {p.white ?? ""}{" "}
-            <span className="text-slate-400">{p.black ?? ""}</span>
-          </span>
-        ))}
-      </div>
 
       <input
         type="range"
@@ -60,14 +35,17 @@ export function MoveTimeline({
         max={total}
         value={cursor}
         onChange={(e) => onSeek(Number(e.target.value))}
-        className="w-40 accent-sky-500"
+        className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-slate-700 accent-sky-400"
         aria-label="Scrub timeline"
       />
+
+      {/* Options group, set apart from the transport controls. */}
+      <span className="h-5 w-px shrink-0 bg-white/10" />
 
       <select
         value={speed}
         onChange={(e) => onSpeed(Number(e.target.value))}
-        className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-200"
+        className="shrink-0 rounded-full bg-white/5 px-2 py-1 text-xs text-slate-200 outline-none transition hover:bg-white/10"
         aria-label="Playback speed"
       >
         <option value={0.5}>0.5×</option>
@@ -75,6 +53,49 @@ export function MoveTimeline({
         <option value={2}>2×</option>
         <option value={4}>4×</option>
       </select>
+
+      <label
+        className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-slate-100"
+        title="Load a match log (.jsonl)"
+      >
+        <ImportIcon />
+        <input
+          type="file"
+          accept=".jsonl,.json,.log,.txt"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (file) onLoad(await file.text());
+          }}
+        />
+      </label>
     </div>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M4.5 2.7c0-.6.65-.98 1.16-.66l8 5.3a.8.8 0 0 1 0 1.32l-8 5.3A.8.8 0 0 1 4.5 13.3z" />
+    </svg>
+  );
+}
+
+function PauseIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <rect x="3.5" y="2.5" width="3.5" height="11" rx="1.2" />
+      <rect x="9" y="2.5" width="3.5" height="11" rx="1.2" />
+    </svg>
+  );
+}
+
+/** Down-into-tray = "load a file from disk" (import), distinct from a share/export glyph. */
+function ImportIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 2.5V9.5M5 6.5l3 3 3-3" />
+      <path d="M2.5 10.5v1.5a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-1.5" />
+    </svg>
   );
 }

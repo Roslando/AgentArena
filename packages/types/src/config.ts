@@ -57,6 +57,10 @@ export const PlayerConfigSchema = z.object({
   name: z.string().min(1),
   provider: ProviderConfigSchema,
   systemPrompt: z.string().optional(),
+  /** USD price per 1M input tokens (for live cost display). */
+  priceInputPerM: z.number().nonnegative().optional(),
+  /** USD price per 1M output tokens (for live cost display). */
+  priceOutputPerM: z.number().nonnegative().optional(),
 });
 
 export type PlayerConfig = z.infer<typeof PlayerConfigSchema>;

@@ -1,4 +1,10 @@
-import type { LlmProvider, LogEntry, MatchConfig, ToolDefinition } from "@agentarena/types";
+import type {
+  LlmProvider,
+  LogEntry,
+  MatchConfig,
+  MatchStartEntry,
+  ToolDefinition,
+} from "@agentarena/types";
 import { MatchLogger } from "./match-logger.js";
 import { McpManager } from "./mcp-manager.js";
 import { createProvider } from "./providers/factory.js";
@@ -23,6 +29,8 @@ interface PlayerState {
   totalTokensInput: number;
   totalTokensOutput: number;
   lastMoves: LastMoveDetail[];
+  /** The player's own last few reasoning notes (plan memory), carried across turns. */
+  notes: string[];
 }
 
 /**
@@ -56,6 +64,7 @@ export class MatchRunner {
         totalTokensInput: 0,
         totalTokensOutput: 0,
         lastMoves: [],
+        notes: [],
       });
     }
   }
@@ -76,12 +85,17 @@ export class MatchRunner {
       type: "match.start",
       t: new Date().toISOString(),
       matchId: this.config.matchId,
-      players: this.config.players.map((p) => ({
-        id: p.id,
-        name: p.name,
-        providerType: p.provider.type,
-        model: p.provider.model,
-      })),
+      players: this.config.players.map((p) => {
+        const rosterEntry: MatchStartEntry["players"][number] = {
+          id: p.id,
+          name: p.name,
+          providerType: p.provider.type,
+          model: p.provider.model,
+        };
+        if (p.priceInputPerM !== undefined) rosterEntry.priceInputPerM = p.priceInputPerM;
+        if (p.priceOutputPerM !== undefined) rosterEntry.priceOutputPerM = p.priceOutputPerM;
+        return rosterEntry;
+      }),
     });
 
     try {
@@ -133,10 +147,16 @@ export class MatchRunner {
         const stateContent = extractTextContent(state);
         const boardJson = tryParseJson(stateContent);
 
-        // Format minimal user message (Change 4)
-        const turnStartIndex = history.length;
+        // Format minimal, self-contained user message: current board (always
+        // complete) + the player's recent moves and plan notes (memory).
         if (boardJson) {
-          const formatted = formatBoardMessage(turn, boardJson, player.lastMoves.at(-1) ?? null);
+          const formatted = formatBoardMessage(
+            turn,
+            boardJson,
+            player.lastMoves.at(-1) ?? null,
+            player.lastMoves,
+            player.notes,
+          );
           history.push({ role: "user", content: formatted });
         } else {
           // Fallback: use raw state string
@@ -306,6 +326,16 @@ export class MatchRunner {
                   }
                 }
 
+                // Remember the player's own reasoning (plan memory) for the next
+                // few turns so it doesn't lose track of its intentions.
+                const note = response.content.trim();
+                if (note) {
+                  player.notes.push(note);
+                  if (player.notes.length > 3) {
+                    player.notes.shift();
+                  }
+                }
+
                 // Inject tool result into history for next turn
                 history.push({
                   role: "assistant",
@@ -316,8 +346,9 @@ export class MatchRunner {
                   content: `Tool result: ${resultContent}`,
                 });
 
-                // Change 3: prune history — keep system + last 3 SANs + current turn
-                pruneHistory(history, player.lastMoves, turnStartIndex);
+                // Reset per turn: the next turn rebuilds a self-contained message
+                // (fresh board + recent moves + plan notes). No stale board lingers.
+                pruneHistory(history);
 
                 break; // success, exit retry loop
               } catch (err) {
@@ -452,7 +483,8 @@ export class MatchRunner {
 const DEFAULT_SYSTEM_PROMPT =
   "You are an AI agent competing in a game.\n" +
   "Analyze the current game state, then call the appropriate tool to take your action.\n" +
-  "One sentence of reasoning, then the tool call. No lists. No JSON. No long explanations.";
+  "One sentence stating your action and your short-term intention (shown back to you " +
+  "next turn), then the tool call. No lists. No JSON. No long explanations.";
 
 /**
  * Extract text content from an MCP callTool result.
@@ -486,12 +518,18 @@ function tryParseJson(raw: string): Record<string, unknown> | null {
 }
 
 /**
- * Format a minimal board message from the MCP get_board JSON response (Change 4).
+ * Format a self-contained board message from the MCP get_board JSON response.
+ *
+ * The board is always complete, so we never carry stale boards across turns.
+ * Instead we append the player's own recent moves (factual memory) and recent
+ * reasoning notes (plan memory) so the agent keeps track of its intentions.
  */
 function formatBoardMessage(
   turn: number,
   board: Record<string, unknown>,
   lastOpponentMove: LastMoveDetail | null,
+  recentMoves: LastMoveDetail[],
+  recentNotes: string[],
 ): string {
   const color = String(board.you_are ?? "?");
   const faults = Number(board.your_faults ?? 0);
@@ -511,6 +549,14 @@ function formatBoardMessage(
 
   msg += `\n${ascii}\n\n`;
   msg += `Check: ${check}. Checkmate: ${checkmate}. Stalemate: ${stalemate}.`;
+
+  if (recentMoves.length > 0) {
+    msg += `\n\nYour recent moves: ${recentMoves.map((m) => m.san).join(", ")}.`;
+  }
+  if (recentNotes.length > 0) {
+    msg += `\nYour recent notes (oldest first):`;
+    for (const n of recentNotes) msg += `\n- ${n}`;
+  }
 
   return msg;
 }
@@ -552,30 +598,16 @@ function formatLastLine(san: string, detail: LastMoveDetail, advColor: string): 
 }
 
 /**
- * Prune LLM history (Change 3):
- * - Keep system prompt
- * - Keep last 3 SAN descriptions from previous turns
- * - Keep current turn messages (from turnStartIndex onward)
+ * Reset the history at the end of a turn, keeping only the system prompt.
+ *
+ * Each turn rebuilds a self-contained user message (fresh board + recent moves +
+ * plan notes via {@link formatBoardMessage}), so nothing else needs to persist —
+ * in particular no stale board diagram lingers in context.
  */
 function pruneHistory(
   history: Array<{ role: "system" | "user" | "assistant"; content: string }>,
-  lastMoves: LastMoveDetail[],
-  turnStartIndex: number,
 ): void {
   const system = history[0];
-  const currentTurn = history.slice(turnStartIndex);
-
-  // Build SAN description messages from the last N moves
-  const sanMessages = lastMoves.map((m) => {
-    const capture = m.captured ? ` takes ${m.captured}` : "";
-    const check = m.isCheck ? `, check` : "";
-    return {
-      role: "user" as const,
-      content: `Last move: ${m.san} (${m.piece} ${m.from}→${m.to}${capture}${check})`,
-    };
-  });
-
   history.length = 0;
   if (system) history.push(system);
-  history.push(...sanMessages, ...currentTurn);
 }
