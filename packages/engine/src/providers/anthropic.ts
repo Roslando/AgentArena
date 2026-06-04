@@ -5,6 +5,7 @@ import type {
   LlmSendConfig,
   ToolDefinition,
 } from "@agentarena/types";
+import { fetchWithRetry } from "./http.js";
 
 /**
  * Anthropic provider (uses the Messages API).
@@ -63,20 +64,19 @@ export class AnthropicProvider implements LlmProvider {
       }));
     }
 
-    const res = await fetch(`${this.baseUrl}/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": this.apiKey,
-        "anthropic-version": this.apiVersion,
+    const res = await fetchWithRetry(
+      `${this.baseUrl}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": this.apiKey,
+          "anthropic-version": this.apiVersion,
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => "unknown");
-      throw new Error(`Anthropic API error ${res.status}: ${text}`);
-    }
+      "Anthropic",
+    );
 
     const json = (await res.json()) as {
       usage: { input_tokens: number; output_tokens: number };

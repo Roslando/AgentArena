@@ -5,6 +5,7 @@ import type {
   LlmSendConfig,
   ToolDefinition,
 } from "@agentarena/types";
+import { fetchWithRetry } from "./http.js";
 
 /**
  * Google Gemini provider (uses the chat completion endpoint).
@@ -57,16 +58,15 @@ export class GoogleProvider implements LlmProvider {
     }
 
     const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => "unknown");
-      throw new Error(`Google API error ${res.status}: ${text}`);
-    }
+    const res = await fetchWithRetry(
+      url,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      "Google",
+    );
 
     const json = (await res.json()) as {
       candidates: Array<{

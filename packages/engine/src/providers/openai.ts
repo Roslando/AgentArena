@@ -5,6 +5,7 @@ import type {
   LlmSendConfig,
   ToolDefinition,
 } from "@agentarena/types";
+import { fetchWithRetry } from "./http.js";
 
 /**
  * OpenAI-compatible provider (also serves as the base for Ollama).
@@ -37,19 +38,18 @@ export class OpenAiProvider implements LlmProvider {
     };
     if (tools?.length) body.tools = tools;
 
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`,
+    const res = await fetchWithRetry(
+      `${this.baseUrl}/chat/completions`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => "unknown");
-      throw new Error(`OpenAI API error ${res.status}: ${text}`);
-    }
+      "OpenAI",
+    );
 
     const json = (await res.json()) as {
       usage: { prompt_tokens: number; completion_tokens: number };
