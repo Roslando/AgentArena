@@ -246,5 +246,4 @@ packages/
 
 ## License
 
-<!-- TODO(you): add a LICENSE file. MIT is a safe default for a portfolio project. -->
-Released under the **MIT License** — add a `LICENSE` file to make it official.
+Released under the **MIT License** — see [`LICENSE`](LICENSE).
