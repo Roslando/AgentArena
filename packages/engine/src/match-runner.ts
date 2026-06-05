@@ -23,6 +23,8 @@ interface PlayerState {
   id: string;
   name: string;
   provider: ReturnType<typeof createProvider>;
+  /** Per-player output cap; falls back to limits.maxTokensPerTurn when unset. */
+  maxTokens: number | undefined;
   retries: number;
   turnCount: number;
   totalLlmLatencyMs: number;
@@ -58,6 +60,7 @@ export class MatchRunner {
         id: p.id,
         name: p.name,
         provider: createProvider(p.id, p.provider),
+        maxTokens: p.maxTokens,
         retries: 0,
         turnCount: 0,
         totalLlmLatencyMs: 0,
@@ -144,8 +147,11 @@ export class MatchRunner {
       let turn = 0;
 
       while (!this.abortController.signal.aborted) {
-        // Check global timer
-        if (Date.now() - this.startTime > this.config.limits.maxDurationMs) {
+        // Check global timer (optional — skipped entirely when no cap is set)
+        if (
+          this.config.limits.maxDurationMs !== undefined &&
+          Date.now() - this.startTime > this.config.limits.maxDurationMs
+        ) {
           return await this.endMatch("timeout", undefined);
         }
 
@@ -190,7 +196,7 @@ export class MatchRunner {
         let response: Awaited<ReturnType<LlmProvider["send"]>>;
         try {
           response = await player.provider.send(history, toolDefs, {
-            maxTokens: this.config.limits.maxTokensPerTurn,
+            maxTokens: player.maxTokens ?? this.config.limits.maxTokensPerTurn,
           });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -303,7 +309,7 @@ export class MatchRunner {
                   // Re-send to LLM with the error context
                   try {
                     response = await player.provider.send(history, toolDefs, {
-                      maxTokens: this.config.limits.maxTokensPerTurn,
+                      maxTokens: player.maxTokens ?? this.config.limits.maxTokensPerTurn,
                     });
                     // Extract new args from the LLM's corrected tool call
                     const newTc = response.toolCalls[0];
@@ -365,6 +371,10 @@ export class MatchRunner {
                 // Reset per turn: the next turn rebuilds a self-contained message
                 // (fresh board + recent moves + plan notes). No stale board lingers.
                 pruneHistory(history);
+                // Clean move played → clear this player's strike counter so the
+                // retry budget is truly per-turn (a single earlier hiccup never
+                // accumulates into a spurious forfeit dozens of moves later).
+                player.retries = 0;
 
                 break; // success, exit retry loop
               } catch (err) {
@@ -405,7 +415,7 @@ export class MatchRunner {
                 // Re-send to LLM
                 try {
                   response = await player.provider.send(history, toolDefs, {
-                    maxTokens: this.config.limits.maxTokensPerTurn,
+                    maxTokens: player.maxTokens ?? this.config.limits.maxTokensPerTurn,
                   });
                 } catch {
                   break;
@@ -414,11 +424,25 @@ export class MatchRunner {
             }
           }
         } else {
-          // Text-only response
-          history.push({
-            role: "assistant",
-            content: response.content,
-          });
+          // No tool call → the model produced no move this turn (its output was
+          // truncated at maxTokens, or it replied with text only). A turn MUST
+          // yield a move, so we retry the SAME player and never rotate: the game
+          // server applies moves by side-to-move, so handing the turn to the
+          // opponent would let one model play BOTH colors. Forfeit this player
+          // only if it keeps failing to move.
+          player.retries++;
+          if (player.retries >= this.config.limits.maxRetriesPerTurn) {
+            this.log.write({
+              type: "forfeit",
+              t: new Date().toISOString(),
+              matchId: this.config.matchId,
+              playerId: player.id,
+              reason: `No move produced after ${player.retries} attempts (finishReason: ${response.finishReason ?? "unknown"})`,
+            });
+            return await this.endMatch("forfeit", this.getNextPlayer(currentPlayerIndex)?.id);
+          }
+          pruneHistory(history);
+          continue; // retry the same player; do NOT rotate to the opponent
         }
 
         // Rotate to next player

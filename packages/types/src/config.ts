@@ -60,6 +60,13 @@ export const PlayerConfigSchema = z.object({
   name: z.string().min(1),
   provider: ProviderConfigSchema,
   systemPrompt: z.string().optional(),
+  /**
+   * Per-player output cap. Overrides limits.maxTokensPerTurn for this player
+   * only. Useful when models have opposite needs — e.g. a cheap model gets a
+   * generous cap while an expensive one is kept low to fit a tight balance
+   * (providers like OpenRouter pre-authorize max_tokens × price before running).
+   */
+  maxTokens: z.number().int().positive().optional(),
   /** USD price per 1M input tokens (for live cost display). */
   priceInputPerM: z.number().nonnegative().optional(),
   /** USD price per 1M output tokens (for live cost display). */
@@ -72,7 +79,12 @@ export type PlayerConfig = z.infer<typeof PlayerConfigSchema>;
  * Arena-level limits for a match.
  */
 export const MatchLimitsSchema = z.object({
-  maxDurationMs: z.number().positive().default(300_000),
+  /**
+   * Optional global wall-clock cap (ms). Omit it for no time limit — a match
+   * then ends only on a real game outcome (checkmate, draw) or a forfeit, never
+   * on the clock. Set it only if you deliberately want to bound match length.
+   */
+  maxDurationMs: z.number().positive().optional(),
   maxRetriesPerTurn: z.number().int().positive().default(3),
   maxTokensPerTurn: z.number().int().positive().default(4096),
 });

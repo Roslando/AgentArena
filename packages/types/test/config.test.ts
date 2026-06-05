@@ -40,6 +40,15 @@ describe("MatchConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts a per-player maxTokens override", () => {
+    const result = MatchConfigSchema.safeParse({
+      ...validConfig,
+      players: [{ ...validConfig.players[0], maxTokens: 768 }, validConfig.players[1]],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.players[0]?.maxTokens).toBe(768);
+  });
+
   it("rejects a config with only 1 player", () => {
     const result = MatchConfigSchema.safeParse({
       ...validConfig,
@@ -99,7 +108,7 @@ describe("MatchConfigSchema", () => {
 
   it("applies defaults for limits", () => {
     const result = MatchConfigSchema.parse(validConfig);
-    expect(result.limits.maxDurationMs).toBe(300_000);
+    expect(result.limits.maxDurationMs).toBeUndefined(); // no time cap by default
     expect(result.limits.maxRetriesPerTurn).toBe(3);
     expect(result.limits.maxTokensPerTurn).toBe(4096);
   });
