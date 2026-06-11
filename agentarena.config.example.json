@@ -1,45 +1,58 @@
 {
-  "//": "AgentArena match config. Copy this to agentarena.config.json and edit it. Any line whose key starts with // is a comment and is ignored. Fields marked OPTIONAL can be deleted.",
+  "//": "AgentArena match config. Copy to agentarena.config.json and edit. Keys starting with // are comments and are ignored by the engine.",
 
-  "matchId": "chess-001",
+  "matchId": "minimax-m3-vs-opus48",
 
   "//players": "REQUIRED: 2 to 16 players. Each needs id, name and provider.",
   "players": [
     {
       "id": "player-1",
-      "name": "White (Claude)",
+      "name": "MiniMax M3",
       "provider": {
-        "//type": "REQUIRED: one of anthropic | openai | google | ollama.",
-        "type": "anthropic",
-        "model": "claude-sonnet-4-20250514",
-        "//apiKey": "OPTIONAL: overrides the env var (here ANTHROPIC_API_KEY). Prefer .env.",
-        "//baseUrl": "OPTIONAL: custom API endpoint."
+        "//type": "REQUIRED: one of anthropic | openai | google | ollama. Use openai + baseUrl for OpenRouter.",
+        "type": "openai",
+        "model": "minimax/minimax-m3",
+        "//baseUrl": "OPTIONAL: custom API endpoint. Set to https://openrouter.ai/api/v1 for OpenRouter.",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "//apiKey": "OPTIONAL: overrides OPENAI_API_KEY env var. Prefer .env."
       },
-      "//systemPrompt": "OPTIONAL: overrides the game's built-in prompt for this player.",
-      "systemPrompt": "You are playing chess as White. Each turn, call get_board, then call make_move with a legal UCI move. Illegal moves cost a fault; 3 faults and you lose.",
-      "//price": "OPTIONAL: USD per 1M tokens. Only used to show live cost; remove to hide cost.",
-      "priceInputPerM": 3,
-      "priceOutputPerM": 15
+      "//systemPrompt": "OPTIONAL: overrides the game-server prompt for this player.",
+      "//maxTokens": "OPTIONAL: per-player output cap (overrides limits.maxTokensPerTurn). Keep low for expensive models.",
+      "maxTokens": 8192,
+      "//temperature": "OPTIONAL: MiniMax official recommendation is 1.0.",
+      "temperature": 1.0,
+      "//topP": "OPTIONAL: MiniMax official recommendation is 0.95.",
+      "topP": 0.95,
+      "//reasoningEffort": "OPTIONAL: low|medium|high|off. Caps hidden thinking for hybrid models (MiniMax M3, DeepSeek V4). Not effective on Anthropic models — use verbosity instead.",
+      "reasoningEffort": "low",
+      "//priceInputPerM": "OPTIONAL: USD per 1M input tokens, for live cost display.",
+      "priceInputPerM": 0.3,
+      "priceOutputPerM": 1.2
     },
     {
       "id": "player-2",
-      "name": "Black (GPT)",
+      "name": "Claude Opus 4.8",
       "provider": {
         "type": "openai",
-        "model": "gpt-4o"
+        "model": "anthropic/claude-opus-4.8",
+        "baseUrl": "https://openrouter.ai/api/v1"
       },
-      "systemPrompt": "You are playing chess as Black. Each turn, call get_board, then call make_move with a legal UCI move. Illegal moves cost a fault; 3 faults and you lose."
+      "maxTokens": 3072,
+      "//verbosity": "OPTIONAL: low|medium|high. Maps to Anthropic output_config.effort via OpenRouter. This is the main speed knob for Claude 4.7+ (temperature and reasoningEffort are ignored on these models).",
+      "verbosity": "low",
+      "priceInputPerM": 5,
+      "priceOutputPerM": 25
     }
   ],
 
-  "//mcpServer": "REQUIRED: the MCP game server. Use transport stdio to launch a local server, or sse to connect to a URL.",
+  "//mcpServer": "REQUIRED: the MCP game server. Use transport stdio to launch a local process, or sse to connect to a URL.",
   "mcpServer": {
     "transport": "stdio",
     "command": "bun",
     "args": ["packages/games/chess/dist/index.js"],
     "//env": "OPTIONAL: environment variables passed to the game server process.",
     "env": {
-      "CHESS_TIME_LIMIT_MS": "300000"
+      "CHESS_TIME_LIMIT_MS": "3600000"
     }
   },
 
@@ -48,8 +61,8 @@
 
   "//limits": "OPTIONAL: every field has a default, so the whole block can be removed.",
   "limits": {
-    "maxDurationMs": 600000,
+    "//maxDurationMs": "OPTIONAL: wall-clock cap on total match duration (ms). Omit for no time limit.",
     "maxRetriesPerTurn": 3,
-    "maxTokensPerTurn": 4096
+    "maxTokensPerTurn": 8192
   }
 }
