@@ -31,7 +31,7 @@
   "limits": {
     "maxDurationMs": 600000,
     "maxRetriesPerTurn": 3,
-    "maxTokensPerTurn": 4096
+    "maxTokensPerTurn": 8192
   },
   "stateToolName": "get_board"
 }

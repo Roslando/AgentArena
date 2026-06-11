@@ -67,6 +67,40 @@ export const PlayerConfigSchema = z.object({
    * (providers like OpenRouter pre-authorize max_tokens × price before running).
    */
   maxTokens: z.number().int().positive().optional(),
+  /**
+   * Sampling temperature. Set it per the model vendor's recommendation so each
+   * agent runs as it would in everyday use (e.g. MiniMax recommends 1.0). When
+   * omitted, the provider's own default applies.
+   */
+  temperature: z.number().min(0).max(2).optional(),
+  /**
+   * Nucleus sampling cutoff (top_p). Same intent as temperature — match the
+   * vendor's recommendation (e.g. MiniMax 0.95). Omitted ⇒ provider default.
+   */
+  topP: z.number().min(0).max(1).optional(),
+  /**
+   * Reasoning effort for hybrid/reasoning models (e.g. MiniMax M3, which ramps
+   * its hidden reasoning until it can blow the whole output budget on a single
+   * move). "low"|"medium"|"high" bounds the thinking; "off" disables it entirely
+   * (non-thinking mode); "adaptive" turns thinking ON with model-chosen depth (the
+   * only lever for Claude Opus 4.7+, which ignores effort levels). Omitted ⇒ model
+   * default (often OFF for Opus 4.7+).
+   */
+  reasoningEffort: z.enum(["off", "adaptive", "low", "medium", "high"]).optional(),
+  /**
+   * Output verbosity for models where temperature/reasoning.effort are not
+   * effective (e.g. Claude Opus 4.7+). Maps to OpenRouter `verbosity` →
+   * Anthropic `output_config.effort`. "low" cuts prose and accelerates tool
+   * calls without reducing tactical depth. Omitted ⇒ model default.
+   */
+  verbosity: z.enum(["low", "medium", "high"]).optional(),
+  /**
+   * Maximum reasoning tokens (`reasoning.max_tokens`). Must be less than
+   * maxTokens — reserves the remainder for the actual tool call + text so the
+   * model never forfeits with `finishReason: "length"`. Essential for Claude
+   * Opus 4.7+ in adaptive mode on complex positions. Omitted ⇒ uncapped.
+   */
+  reasoningBudget: z.number().int().positive().optional(),
   /** USD price per 1M input tokens (for live cost display). */
   priceInputPerM: z.number().nonnegative().optional(),
   /** USD price per 1M output tokens (for live cost display). */
@@ -86,7 +120,7 @@ export const MatchLimitsSchema = z.object({
    */
   maxDurationMs: z.number().positive().optional(),
   maxRetriesPerTurn: z.number().int().positive().default(3),
-  maxTokensPerTurn: z.number().int().positive().default(4096),
+  maxTokensPerTurn: z.number().int().positive().default(8192),
 });
 
 export type MatchLimits = z.infer<typeof MatchLimitsSchema>;

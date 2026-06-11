@@ -120,7 +120,7 @@ const colorOf = (i: number): "white" | "black" => (i % 2 === 0 ? "white" : "blac
 
 push({ type: "match.start", t: t(clock++), matchId: MATCH_ID, game: "chess", players: PLAYERS });
 
-const losses = { white: [] as string[], black: [] as string[] }; // pieces each color has lost
+const captured = { white: [] as string[], black: [] as string[] }; // pieces each color captured (its trophies)
 const faults = { white: 0, black: 0 };
 const PIECE = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
 const named = (c: string) => PIECE[c as keyof typeof PIECE] ?? c;
@@ -176,8 +176,8 @@ for (let i = 0; i < MOVES.length; i++) {
     last_move_uci: lastVerbose
       ? `${lastVerbose.from}${lastVerbose.to}${lastVerbose.promotion ?? ""}`
       : null,
-    captured_by_you: losses[mover], // server convention: your own losses
-    captured_by_opponent: losses[opponent],
+    captured_by_you: captured[mover], // server convention: the pieces you captured
+    captured_by_opponent: captured[opponent],
     check: chess.isCheck(),
     checkmate: chess.isCheckmate(),
     stalemate: chess.isStalemate(),
@@ -231,7 +231,7 @@ for (let i = 0; i < MOVES.length; i++) {
 
   const mv = chess.move(MOVES[i] as string);
   if (!mv) throw new Error(`Illegal SAN in showcase: ${MOVES[i]}`);
-  if (mv.captured) losses[opponent].push(named(mv.captured)); // captured piece belongs to opponent
+  if (mv.captured) captured[mover].push(named(mv.captured)); // trophy goes to the capturing side
   const ms = stats[mover];
   if (ms) ms.turns += 1;
 

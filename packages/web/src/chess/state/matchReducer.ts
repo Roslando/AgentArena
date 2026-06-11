@@ -24,6 +24,7 @@ export function matchReducer(prev: MatchState, entry: LogEntry): MatchState {
         totalLlmLatencyMs: 0,
         avgLlmLatencyMs: 0,
         faults: 0,
+        toolCalls: 0,
         ...(p.priceInputPerM !== undefined ? { priceInputPerM: p.priceInputPerM } : {}),
         ...(p.priceOutputPerM !== undefined ? { priceOutputPerM: p.priceOutputPerM } : {}),
       }));
@@ -51,10 +52,23 @@ export function matchReducer(prev: MatchState, entry: LogEntry): MatchState {
       return mapPlayer(prev, entry.playerId, (p) => {
         const turns = p.turns + 1;
         const totalLlmLatencyMs = p.totalLlmLatencyMs + (entry.latencyMs ?? 0);
+        // Bubble label = the move this utterance belongs to (moves this colour has
+        // already made + the one in progress), NOT the raw response count. A turn
+        // can span several LLM calls — a read-only get_board, an illegal-move retry —
+        // which must all share one number, else a player that inspects the board
+        // before moving appears whole turns "ahead" of its opponent.
+        const moveTurn = prev.moves.filter((m) => m.color === p.color).length + 1;
+        // A tool-only response (e.g. a get_board read) usually carries empty content —
+        // standard function-calling behaviour, not a bug. Skip the empty chat bubble;
+        // the board still updates from the tool result, and the stats below still
+        // accumulate (the read is a real LLM call that spent tokens and time).
+        const messages = entry.content.trim()
+          ? [...p.messages, { turn: moveTurn, text: entry.content }]
+          : p.messages;
         return {
           ...p,
           thinking: false,
-          messages: [...p.messages, { turn: turns, text: entry.content }],
+          messages,
           turns,
           tokensInput: p.tokensInput + entry.tokensInput,
           tokensOutput: p.tokensOutput + entry.tokensOutput,
@@ -62,6 +76,12 @@ export function matchReducer(prev: MatchState, entry: LogEntry): MatchState {
           avgLlmLatencyMs: turns > 0 ? Math.round(totalLlmLatencyMs / turns) : 0,
         };
       });
+
+    case "tool.call":
+      // Count every tool call (state reads + actions) for the agentic protocol
+      // signal: ideal is ~2 per move (observe then act). Accumulated live; replay
+      // folds the same entries, so the count is identical in both modes.
+      return mapPlayer(prev, entry.playerId, (p) => ({ ...p, toolCalls: p.toolCalls + 1 }));
 
     case "tool.result":
       return applyToolResult(prev, entry.result);
@@ -125,8 +145,10 @@ function applyToolResult(state: MatchState, result: unknown): MatchState {
   const json = parseToolJson(result);
   if (!json) return state;
 
-  // Board snapshot — authoritative position, faults and captures
-  if (typeof json.fen === "string") {
+  // Board snapshot (get_board) — authoritative position, faults and captures. Keyed on
+  // you_are, which only get_board emits: a make_move result now also carries `fen`, so
+  // `fen` alone no longer tells a snapshot apart from a move outcome.
+  if (typeof json.fen === "string" && typeof json.you_are === "string") {
     const youAre = json.you_are === "black" ? "black" : "white";
     const opponent: Color = youAre === "white" ? "black" : "white";
     const yourFaults = Number(json.your_faults ?? 0);
@@ -152,16 +174,45 @@ function applyToolResult(state: MatchState, result: unknown): MatchState {
     };
   }
 
-  // Move outcome — append to the SAN timeline
+  // Illegal move — the mover earns a fault. The result carries the mover's running fault
+  // count (faults_total); attribute it to the side to move (parity), since an illegal
+  // move does NOT advance the SAN list, so parity still points at the mover. get_board
+  // snapshots lag and never capture the *forfeiting* 3rd fault (no turn follows it), so
+  // this branch is what keeps the displayed count in sync with the log.
+  if (json.fault === true && typeof json.faults_total === "number") {
+    const color: Color = state.moves.length % 2 === 0 ? "white" : "black";
+    const players = state.players.map((p) =>
+      p.color === color ? { ...p, faults: json.faults_total as number } : p,
+    );
+    return { ...state, players };
+  }
+
+  // Move outcome — append to the SAN timeline and apply the post-move position
   if (json.accepted === true && typeof json.san === "string") {
     const color: Color = state.moves.length % 2 === 0 ? "white" : "black";
+    // A capture on this move adds the taken piece to the MOVER's tray. A later get_board
+    // snapshot REPLACES the tray with the authoritative list, so appending here can't
+    // double-count — it only matters for the final move (and any blind stretch), which
+    // no get_board ever follows.
+    const captured = typeof json.captured === "string" ? json.captured : null;
     return {
       ...state,
+      // The move result carries the post-move FEN, so the board reflects the move at
+      // once — including the game-ending move that no get_board snapshot follows.
+      fen: typeof json.fen === "string" ? json.fen : state.fen,
       moves: [...state.moves, { ply: state.moves.length + 1, san: json.san, color }],
       lastMove:
         typeof json.from === "string" && typeof json.to === "string"
           ? { from: json.from, to: json.to }
           : state.lastMove,
+      capturedByWhite:
+        captured && color === "white"
+          ? [...state.capturedByWhite, captured]
+          : state.capturedByWhite,
+      capturedByBlack:
+        captured && color === "black"
+          ? [...state.capturedByBlack, captured]
+          : state.capturedByBlack,
     };
   }
 

@@ -17,10 +17,12 @@ const server = new Server(
 
 const CHESS_SYSTEM_PROMPT =
   "You are a professional chess player playing a match.\n" +
-  "Analyze the current board state and decide your next move.\n" +
-  "In one short sentence, state your move AND your short-term plan (your intention), " +
-  "then call the move tool. This note is shown back to you next turn, so make it " +
-  "useful to your future self.\n" +
+  "Each turn, first call get_board to see the current position, then decide your move.\n" +
+  "Think efficiently: weigh only the few candidate moves, don't re-examine lines " +
+  "you've already rejected, and commit once you've found a sound move.\n" +
+  "Then ALWAYS reply with exactly one short sentence stating your move AND your " +
+  "short-term plan, followed by the make_move call — never an empty message. " +
+  "This note is shown back to you next turn, so make it useful to your future self.\n" +
   "No lists. No JSON. No long explanations.";
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -28,7 +30,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "get_board",
       description:
-        "Returns the current board state: a Unicode diagram, FEN, which color you play (you_are), whose turn it is, opponent's last move (last_move_san/last_move_uci), pieces captured by each side, fault counts, and game status (check/checkmate/stalemate). Called automatically by the arena at turn start — call it again only if you need a refreshed view.",
+        "Returns the current board state: a Unicode diagram, FEN, which color you play (you_are), whose turn it is, opponent's last move (last_move_san/last_move_uci), pieces captured by each side, fault counts, and game status (check/checkmate/stalemate). Call this at the start of every turn to see the position before moving.",
       inputSchema: { type: "object", properties: {} },
     },
     {
@@ -48,10 +50,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
   ],
 }));
-
-function getPlayerColor(): "white" | "black" {
-  return game.getBoardState().playerColor;
-}
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
@@ -142,10 +140,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return response;
     }
 
-    const yourColor = getPlayerColor() === "white" ? "black" : "white"; // after move, turn has flipped
     const state = game.getBoardState();
+    const yourColor = state.playerColor === "white" ? "black" : "white"; // after move, turn has flipped
     const output: Record<string, unknown> = {
       accepted: true,
+      // Post-move FEN so the UI renders the new position immediately — including the
+      // game-ending move, which no get_board snapshot ever follows.
+      fen: state.fen,
       san: result.san,
       piece_moved: result.piece,
       from: result.from,

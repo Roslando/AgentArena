@@ -87,7 +87,7 @@ for (let i = 0; i < MOVES.length; i++) {
   // Apply the move
   const mv = chess.move(MOVES[i] as string);
   if (!mv) throw new Error(`Illegal SAN in fixture: ${MOVES[i]}`);
-  if (mv.captured) captured[opponent].push(PIECE[mv.captured as keyof typeof PIECE]);
+  if (mv.captured) captured[mover].push(PIECE[mv.captured as keyof typeof PIECE]);
 
   push({
     type: "tool.call",

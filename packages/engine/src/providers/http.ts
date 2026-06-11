@@ -32,7 +32,12 @@ const DEFAULTS: Required<RetryOptions> = {
   maxAttempts: 5,
   baseDelayMs: 500,
   maxDelayMs: 8000,
-  timeoutMs: 120000,
+  // Generous per-attempt ceiling, applied equally to every provider. Reasoning
+  // models can legitimately spend many minutes on a single turn (a large output
+  // budget streamed at a few dozen tokens/s). A short timeout would abort a valid
+  // slow response mid-stream and trigger a false forfeit — so this is the shared
+  // "wall clock", deliberately set above the worst-case full-budget turn.
+  timeoutMs: 900000,
 };
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));

@@ -13,12 +13,13 @@ describe("MatchLogger", () => {
     logger = new MatchLogger("test-match", tmpDir);
   });
 
-  it("writes entries as JSONL", () => {
+  it("writes entries as JSONL", async () => {
     logger.write({
       type: "match.start",
       t: new Date().toISOString(),
       matchId: "test-match",
     });
+    await logger.flush();
 
     const content = readFileSync(join(tmpDir, "test-match.jsonl"), "utf-8");
     const lines = content.trim().split("\n");
@@ -60,5 +61,24 @@ describe("MatchLogger", () => {
       matchId: "nested-match",
     });
     expect(existsSync(join(nestedDir, "nested-match.jsonl"))).toBe(true);
+  });
+
+  it("truncates a stale file when a new logger reuses the same matchId", async () => {
+    logger.write({ type: "match.start", t: new Date().toISOString(), matchId: "test-match" });
+    await logger.flush();
+
+    // A re-run of the same id must start clean, not append to the previous match.
+    const rerun = new MatchLogger("test-match", tmpDir);
+    rerun.write({
+      type: "match.end",
+      t: new Date().toISOString(),
+      matchId: "test-match",
+      reason: "game_over",
+    });
+    await rerun.flush();
+
+    const lines = readFileSync(join(tmpDir, "test-match.jsonl"), "utf-8").trim().split("\n");
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]).type).toBe("match.end");
   });
 });

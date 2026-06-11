@@ -41,18 +41,7 @@ export class AnthropicProvider implements LlmProvider {
 
     const body: Record<string, unknown> = {
       model: this.model,
-      messages: msgs.map((m) => {
-        const msg: Record<string, unknown> = { role: m.role, content: m.content };
-        if (m.toolCalls?.length) {
-          msg.content = m.toolCalls.map((tc) => ({
-            type: "tool_use",
-            id: tc.id,
-            name: tc.function.name,
-            input: JSON.parse(tc.function.arguments),
-          }));
-        }
-        return msg;
-      }),
+      messages: msgs.map((m) => ({ role: m.role, content: m.content })),
       max_tokens: config?.maxTokens ?? 4096,
     };
     if (system) body.system = system;

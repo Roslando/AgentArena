@@ -63,6 +63,12 @@ export interface LlmResponseEntry extends BaseEntry {
   tokensOutput: number;
   /** The raw finish reason from the provider */
   finishReason: string;
+  /**
+   * Hidden reasoning trace, when the provider exposes it (e.g. OpenRouter
+   * `message.reasoning`). Logged for post-mortem analysis only; never fed back to
+   * the model. Often absent. The UI ignores it (no chat bubble).
+   */
+  reasoning?: string;
 }
 
 export interface LlmErrorEntry extends BaseEntry {

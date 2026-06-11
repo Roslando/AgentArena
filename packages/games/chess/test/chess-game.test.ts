@@ -87,14 +87,15 @@ describe("ChessGame", () => {
       expect(result.captured).toBe("pawn");
     });
 
-    it("tracks captured pieces by opponent side", () => {
+    it("tracks captured pieces under the capturing side's key", () => {
       const game = new ChessGame();
       game.makeMove("e2e4");
       game.makeMove("d7d5");
-      game.makeMove("e4d5");
+      game.makeMove("e4d5"); // White captures Black's pawn
 
       const state = game.getBoardState();
-      expect(state.capturedPieces.black).toContain("pawn");
+      expect(state.capturedPieces.white).toContain("pawn");
+      expect(state.capturedPieces.black).toEqual([]);
     });
   });
 

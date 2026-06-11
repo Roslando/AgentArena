@@ -183,12 +183,11 @@ export class ChessGame {
     const lastUci = `${move.from}${move.to}${move.promotion ?? ""}`;
     this.lastMove = { san: move.san, uci: lastUci };
 
-    // Track captured pieces
+    // Track captured pieces under the capturing side's key
     if (move.captured) {
-      const opponent = turn === "w" ? "b" : "w";
-      const captured = this.capturedPieces.get(opponent) ?? [];
+      const captured = this.capturedPieces.get(turn) ?? [];
       captured.push(PIECE_NAMES[move.captured] ?? move.captured);
-      this.capturedPieces.set(opponent, captured);
+      this.capturedPieces.set(turn, captured);
     }
 
     // Check terminal conditions

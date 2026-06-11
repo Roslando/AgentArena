@@ -56,8 +56,10 @@ export function ChatThread({
   const rowAlign = side === "right" ? "items-end" : "items-start";
   const empty = messages.length === 0 && !thinking;
 
-  // Newest first.
-  const ordered = [...messages].reverse();
+  // Newest first. Tag each with its append index for a stable React key: turn
+  // numbers can repeat (a player may inspect the board before moving), so they
+  // are not unique on their own.
+  const ordered = messages.map((m, idx) => ({ ...m, idx })).reverse();
 
   return (
     <div className="relative w-full">
@@ -94,7 +96,7 @@ export function ChatThread({
 
         {ordered.map((m) => (
           <div
-            key={m.turn}
+            key={m.idx}
             className={`max-w-[92%] rounded-2xl border px-3.5 py-2 text-sm leading-relaxed text-slate-100 ${bubble} ${
               side === "right" ? "rounded-tr-sm" : "rounded-tl-sm"
             }`}

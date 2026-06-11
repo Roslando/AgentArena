@@ -23,6 +23,8 @@ export interface PlayerView {
   totalLlmLatencyMs: number;
   avgLlmLatencyMs: number;
   faults: number;
+  /** Total tool calls this player issued (state reads + actions) — agentic protocol signal. */
+  toolCalls: number;
   /** USD price per 1M input tokens, when configured (for live cost display). */
   priceInputPerM?: number;
   /** USD price per 1M output tokens, when configured (for live cost display). */

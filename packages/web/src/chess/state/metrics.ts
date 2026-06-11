@@ -13,6 +13,21 @@ export function fmtUsd(v: number): string {
   return v >= 1 ? `$${v.toFixed(2)}` : `$${v.toFixed(4)}`;
 }
 
+/**
+ * Output-token generation throughput (tokens per second), or 0 before any timing.
+ *
+ * Computed as an aggregate (total output tokens ÷ total LLM seconds) rather than
+ * per-call, so amortised TTFT does not skew it. This is the *generation speed*
+ * dimension — distinct from how MANY tokens a model spends (over-thinking) and from
+ * total latency. Together they let you read WHY a model is slow: many tokens vs. a
+ * slow serving rate. Note: completion tokens include hidden reasoning, so this is
+ * the effective throughput a user actually waits through.
+ */
+export function throughputTokPerSec(p: PlayerView): number {
+  const secs = p.totalLlmLatencyMs / 1000;
+  return secs > 0 ? p.tokensOutput / secs : 0;
+}
+
 export function fmtTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }

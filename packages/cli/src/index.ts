@@ -50,6 +50,8 @@ function loadConfig(configPath: string): MatchConfig {
 async function runHeadless(config: MatchConfig): Promise<void> {
   const runner = new MatchRunner(config);
   const result = await runner.run();
+  // Disk writes are async; make sure the log is fully flushed before we exit.
+  await runner.logger.flush();
   console.log(JSON.stringify({ matchId: config.matchId, ...result }, null, 2));
 }
 

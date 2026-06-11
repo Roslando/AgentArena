@@ -14,6 +14,10 @@ const WEB_DIST = process.env.WEB_DIST ?? "packages/web/dist";
 const rooms = new Map<string, Set<ServerWebSocket<WsData>>>();
 /** matchId -> every entry broadcast so far, so late joiners can catch up */
 const history = new Map<string, LogEntry[]>();
+/** matchIds with a live MatchRunner in flight — guards against duplicate starts. */
+const activeMatches = new Set<string>();
+/** Keep a finished match's buffer this long for late joiners, then evict it. */
+const HISTORY_TTL_MS = 5 * 60_000;
 
 interface WsData {
   matchId: string;
@@ -46,9 +50,17 @@ function broadcast(matchId: string, entry: LogEntry): void {
   buffer.push(entry);
 
   const room = rooms.get(matchId);
-  if (!room) return;
-  const payload = JSON.stringify(entry);
-  for (const ws of room) ws.send(payload);
+  if (room) {
+    const payload = JSON.stringify(entry);
+    for (const ws of room) ws.send(payload);
+  }
+
+  // A match is terminal at match.end: drop its buffer after a grace window so the
+  // history map can't grow without bound across many matches.
+  if (entry.type === "match.end") {
+    const timer = setTimeout(() => history.delete(matchId), HISTORY_TTL_MS);
+    timer.unref?.();
+  }
 }
 
 const CORS = {
@@ -138,23 +150,31 @@ export function startServer() {
         const config = parsed.data;
         const problems = preflight(config);
         if (problems.length > 0) return json({ error: "preflight failed", problems }, 400);
+        // Reject a duplicate start: two matches sharing an id would interleave their
+        // log file and broadcast, and the second match.start would wipe the buffer.
+        if (activeMatches.has(config.matchId))
+          return json({ error: `match "${config.matchId}" is already running` }, 409);
+        activeMatches.add(config.matchId);
         const runner = new MatchRunner(config, (entry) => broadcast(config.matchId, entry));
         // Fire-and-forget: the client watches progress over WebSocket
-        runner.run().catch((err) => {
-          broadcast(config.matchId, {
-            type: "mcp.error",
-            t: new Date().toISOString(),
-            matchId: config.matchId,
-            message: err instanceof Error ? err.message : String(err),
-          });
-        });
+        runner
+          .run()
+          .catch((err) => {
+            broadcast(config.matchId, {
+              type: "mcp.error",
+              t: new Date().toISOString(),
+              matchId: config.matchId,
+              message: err instanceof Error ? err.message : String(err),
+            });
+          })
+          .finally(() => activeMatches.delete(config.matchId));
         return json({ matchId: config.matchId, watch: `/ws?matchId=${config.matchId}` });
       }
 
       // Replay a saved log AS live (key-free demo of the WebSocket path)
       if (url.pathname === "/api/replay-as-live" && req.method === "POST") {
         const body = (await req.json().catch(() => ({}))) as { id?: string; stepMs?: number };
-        const fromId = body.id ?? "sample-foolsmate";
+        const fromId = body.id ?? "sample-showcase";
         const matchId = `live-${fromId}`;
         const stepMs = body.stepMs ?? 600;
         void streamSavedAsLive(matchId, fromId, stepMs);

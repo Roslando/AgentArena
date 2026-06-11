@@ -1,5 +1,7 @@
 import type {
   LlmProvider,
+  LlmResponseEntry,
+  LlmSendConfig,
   LogEntry,
   MatchConfig,
   MatchStartEntry,
@@ -25,6 +27,15 @@ interface PlayerState {
   provider: ReturnType<typeof createProvider>;
   /** Per-player output cap; falls back to limits.maxTokensPerTurn when unset. */
   maxTokens: number | undefined;
+  /** Per-player sampling settings (vendor-recommended). Undefined ⇒ provider default. */
+  temperature: number | undefined;
+  topP: number | undefined;
+  /** Per-player reasoning effort cap for hybrid models. Undefined ⇒ model default. */
+  reasoningEffort: LlmSendConfig["reasoningEffort"];
+  /** Per-player verbosity (Anthropic/OpenRouter output_config.effort). Undefined ⇒ model default. */
+  verbosity: LlmSendConfig["verbosity"];
+  /** Max reasoning tokens; caps internal thinking so the tool call always fits. Undefined ⇒ uncapped. */
+  reasoningBudget: LlmSendConfig["reasoningBudget"];
   retries: number;
   turnCount: number;
   totalLlmLatencyMs: number;
@@ -61,6 +72,11 @@ export class MatchRunner {
         name: p.name,
         provider: createProvider(p.id, p.provider),
         maxTokens: p.maxTokens,
+        temperature: p.temperature,
+        topP: p.topP,
+        reasoningEffort: p.reasoningEffort,
+        verbosity: p.verbosity,
+        reasoningBudget: p.reasoningBudget,
         retries: 0,
         turnCount: 0,
         totalLlmLatencyMs: 0,
@@ -162,52 +178,34 @@ export class MatchRunner {
 
         turn++;
 
-        // Get game state from MCP
-        const state = await this.mcp.callTool(this.config.stateToolName, {});
-        const stateContent = extractTextContent(state);
-        const boardJson = tryParseJson(stateContent);
-
-        // Format minimal, self-contained user message: current board (always
-        // complete) + the player's recent moves and plan notes (memory).
-        if (boardJson) {
-          const formatted = formatBoardMessage(
+        // Pure-pull protocol: the arena does NOT hand the model the game state. The
+        // model must call the state tool itself to observe the board, then act. The
+        // agentic turn loop below keeps the SAME player until it plays a legal move,
+        // so a read-then-move sequence costs no turn. We carry only the player's own
+        // recent moves and plan notes (lightweight memory) so it keeps its thread.
+        history.push({
+          role: "user",
+          content: formatTurnMessage(
             turn,
-            boardJson,
-            player.lastMoves.at(-1) ?? null,
+            this.config.stateToolName,
             player.lastMoves,
             player.notes,
-          );
-          history.push({ role: "user", content: formatted });
-        } else {
-          // Fallback: use raw state string
-          history.push({ role: "user", content: `Turn ${turn}. Game state:\n${stateContent}` });
-        }
-
-        // Send to LLM — start high-resolution timer for latency tracking
-        const llmStartTime = performance.now();
-        this.log.write({
-          type: "llm.sent",
-          t: new Date().toISOString(),
-          matchId: this.config.matchId,
-          playerId: player.id,
-          messageCount: history.length,
+          ),
         });
 
-        let response: Awaited<ReturnType<LlmProvider["send"]>>;
-        try {
-          response = await player.provider.send(history, toolDefs, {
-            maxTokens: player.maxTokens ?? this.config.limits.maxTokensPerTurn,
-          });
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.log.write({
-            type: "llm.error",
-            t: new Date().toISOString(),
-            matchId: this.config.matchId,
-            playerId: player.id,
-            message,
-          });
+        // --- Turn loop: prompt this player until it makes an ACCEPTED move ---
+        // A turn ends ONLY when the player plays a legal move. A read-only tool
+        // (e.g. get_board) feeds its result back and the SAME player continues:
+        // inspecting the board must never cost a turn, and must never hand the
+        // move to the opponent — the game server applies moves by side-to-move,
+        // so rotating after a non-move would let one model play BOTH colors. No
+        // tool call, an illegal move, or a provider error all re-prompt the same
+        // player; a hard action cap forfeits a player that never moves.
+        const turnStart = performance.now();
+        const maxTurnActions = this.config.limits.maxRetriesPerTurn * 4;
 
+        let sent = await this.sendAndLog(player, history, toolDefs);
+        if (!sent) {
           player.retries++;
           if (player.retries >= this.config.limits.maxRetriesPerTurn) {
             this.log.write({
@@ -215,221 +213,208 @@ export class MatchRunner {
               t: new Date().toISOString(),
               matchId: this.config.matchId,
               playerId: player.id,
-              reason: `LLM error after ${player.retries} retries: ${message}`,
+              reason: `LLM error after ${player.retries} retries`,
             });
             return await this.endMatch("forfeit", this.getNextPlayer(currentPlayerIndex)?.id);
           }
           continue;
         }
+        let { response, latencyMs: llmLatencyMs } = sent;
 
-        const llmLatencyMs = Math.round(performance.now() - llmStartTime);
-        this.log.write({
-          type: "llm.response",
-          t: new Date().toISOString(),
-          matchId: this.config.matchId,
-          playerId: player.id,
-          content: response.content,
-          tokensInput: response.tokensInput,
-          tokensOutput: response.tokensOutput,
-          finishReason: response.finishReason,
-          latencyMs: llmLatencyMs,
-        });
+        let moveMade = false;
+        let turnActions = 0;
 
-        // Accumulate per-player stats
-        player.turnCount++;
-        player.totalLlmLatencyMs += llmLatencyMs;
-        player.totalTokensInput += response.tokensInput;
-        player.totalTokensOutput += response.tokensOutput;
-
-        // Execute tool calls
-        if (response.toolCalls.length > 0) {
-          for (const tc of response.toolCalls) {
-            let args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
-            let attempt = 0;
-
-            while (attempt < this.config.limits.maxRetriesPerTurn) {
+        while (!moveMade) {
+          // No tool call at all → no move produced (output truncated, or text only).
+          if (response.toolCalls.length === 0) {
+            player.retries++;
+            if (player.retries >= this.config.limits.maxRetriesPerTurn) {
               this.log.write({
-                type: "tool.call",
+                type: "forfeit",
                 t: new Date().toISOString(),
                 matchId: this.config.matchId,
                 playerId: player.id,
-                toolName: tc.function.name,
-                args,
-                attempt: attempt + 1,
+                reason: `No move produced after ${player.retries} attempts (finishReason: ${response.finishReason ?? "unknown"})`,
               });
-
-              try {
-                const mcpStart = performance.now();
-                const result = await this.mcp.callTool(tc.function.name, args);
-                const mcpLatencyMs = Math.round(performance.now() - mcpStart);
-
-                // Check if the MCP signals game over
-                const resultObj = result as Record<string, unknown> | undefined;
-                if (resultObj?.game_over || resultObj?.gameOver) {
-                  this.log.write({
-                    type: "game.over",
-                    t: new Date().toISOString(),
-                    matchId: this.config.matchId,
-                    playerId: player.id,
-                    result: resultObj,
-                  });
-
-                  history.push({
-                    role: "assistant",
-                    content: response.content,
-                  });
-
-                  const rawWinnerId = (resultObj?.winner_id ?? resultObj?.winnerId) as
-                    | string
-                    | undefined;
-                  return await this.endMatch("game_over", this.mapGameWinner(rawWinnerId));
-                }
-
-                // Illegal move — fault incremented by the game server, but turn is NOT over.
-                // Notify the LLM and let it retry within the same turn.
-                const resultContent = extractTextContent(result);
-                const resultJson = tryParseJson(resultContent);
-
-                if (resultJson?.accepted === false) {
-                  attempt++;
-                  if (attempt >= this.config.limits.maxRetriesPerTurn) {
-                    // Safety cap — in practice the game server forfeits at 3 faults first
-                    return await this.endMatch(
-                      "forfeit",
-                      this.getNextPlayer(currentPlayerIndex)?.id,
-                    );
-                  }
-
-                  history.push({ role: "assistant", content: response.content });
-                  history.push({
-                    role: "user",
-                    content: `Illegal move. Faults: ${String(resultJson.faults_total ?? "?")}/3. Try a different legal move.`,
-                  });
-
-                  // Re-send to LLM with the error context
-                  try {
-                    response = await player.provider.send(history, toolDefs, {
-                      maxTokens: player.maxTokens ?? this.config.limits.maxTokensPerTurn,
-                    });
-                    // Extract new args from the LLM's corrected tool call
-                    const newTc = response.toolCalls[0];
-                    if (newTc) {
-                      args = JSON.parse(newTc.function.arguments) as Record<string, unknown>;
-                    }
-                  } catch {
-                    break; // LLM failed to respond — give up on this turn
-                  }
-                  continue; // Retry while loop with updated args
-                }
-
-                this.log.write({
-                  type: "turn_metrics",
-                  t: new Date().toISOString(),
-                  matchId: this.config.matchId,
-                  playerId: player.id,
-                  llmLatencyMs,
-                  mcpLatencyMs,
-                  turnDurationMs: Math.round(performance.now() - llmStartTime),
-                  turnNumber: turn,
-                });
-                if (resultJson?.san && resultJson?.piece_moved) {
-                  const detail: LastMoveDetail = {
-                    san: String(resultJson.san),
-                    piece: String(resultJson.piece_moved),
-                    from: String(resultJson.from),
-                    to: String(resultJson.to),
-                    captured: resultJson.captured ? String(resultJson.captured) : null,
-                    promotion: resultJson.promotion ? String(resultJson.promotion) : null,
-                    isCheck: Boolean(resultJson.is_check),
-                  };
-                  player.lastMoves.push(detail);
-                  if (player.lastMoves.length > 3) {
-                    player.lastMoves.shift();
-                  }
-                }
-
-                // Remember the player's own reasoning (plan memory) for the next
-                // few turns so it doesn't lose track of its intentions.
-                const note = response.content.trim();
-                if (note) {
-                  player.notes.push(note);
-                  if (player.notes.length > 3) {
-                    player.notes.shift();
-                  }
-                }
-
-                // Inject tool result into history for next turn
-                history.push({
-                  role: "assistant",
-                  content: response.content,
-                });
-                history.push({
-                  role: "user",
-                  content: `Tool result: ${resultContent}`,
-                });
-
-                // Reset per turn: the next turn rebuilds a self-contained message
-                // (fresh board + recent moves + plan notes). No stale board lingers.
-                pruneHistory(history);
-                // Clean move played → clear this player's strike counter so the
-                // retry budget is truly per-turn (a single earlier hiccup never
-                // accumulates into a spurious forfeit dozens of moves later).
-                player.retries = 0;
-
-                break; // success, exit retry loop
-              } catch (err) {
-                attempt++;
-                const message = err instanceof Error ? err.message : String(err);
-
-                this.log.write({
-                  type: "tool.error",
-                  t: new Date().toISOString(),
-                  matchId: this.config.matchId,
-                  playerId: player.id,
-                  toolName: tc.function.name,
-                  error: message,
-                  attempt,
-                });
-
-                if (attempt >= this.config.limits.maxRetriesPerTurn) {
-                  this.log.write({
-                    type: "forfeit",
-                    t: new Date().toISOString(),
-                    matchId: this.config.matchId,
-                    playerId: player.id,
-                    reason: `Tool error after ${attempt} retries: ${message}`,
-                  });
-                  return await this.endMatch("forfeit", this.getNextPlayer(currentPlayerIndex)?.id);
-                }
-
-                // Re-prompt LLM with error for correction
-                history.push({
-                  role: "assistant",
-                  content: response.content,
-                });
-                history.push({
-                  role: "user",
-                  content: `Tool call error: ${message}. Please respond with a corrected move.`,
-                });
-
-                // Re-send to LLM
-                try {
-                  response = await player.provider.send(history, toolDefs, {
-                    maxTokens: player.maxTokens ?? this.config.limits.maxTokensPerTurn,
-                  });
-                } catch {
-                  break;
-                }
-              }
+              return await this.endMatch("forfeit", this.getNextPlayer(currentPlayerIndex)?.id);
             }
+            history.push(assistantTurn(response.content));
+            history.push({
+              role: "user",
+              content:
+                "You did not call any tool. Complete your turn by calling make_move with a legal move.",
+            });
+            sent = await this.sendAndLog(player, history, toolDefs);
+            if (!sent) break;
+            ({ response, latencyMs: llmLatencyMs } = sent);
+            continue;
           }
-        } else {
-          // No tool call → the model produced no move this turn (its output was
-          // truncated at maxTokens, or it replied with text only). A turn MUST
-          // yield a move, so we retry the SAME player and never rotate: the game
-          // server applies moves by side-to-move, so handing the turn to the
-          // opponent would let one model play BOTH colors. Forfeit this player
-          // only if it keeps failing to move.
+
+          // Hard safety cap: never loop forever on read-only tools.
+          if (++turnActions > maxTurnActions) {
+            this.log.write({
+              type: "forfeit",
+              t: new Date().toISOString(),
+              matchId: this.config.matchId,
+              playerId: player.id,
+              reason: `No move after ${turnActions} tool calls in a single turn`,
+            });
+            return await this.endMatch("forfeit", this.getNextPlayer(currentPlayerIndex)?.id);
+          }
+
+          const tc = response.toolCalls[0];
+          if (!tc) break; // unreachable: length checked above
+          let args: Record<string, unknown>;
+          try {
+            args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
+          } catch {
+            args = {};
+          }
+
+          this.log.write({
+            type: "tool.call",
+            t: new Date().toISOString(),
+            matchId: this.config.matchId,
+            playerId: player.id,
+            toolName: tc.function.name,
+            args,
+            attempt: turnActions,
+          });
+
+          let result: unknown;
+          let mcpLatencyMs = 0;
+          try {
+            const mcpStart = performance.now();
+            result = await this.mcp.callTool(tc.function.name, args);
+            mcpLatencyMs = Math.round(performance.now() - mcpStart);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            this.log.write({
+              type: "tool.error",
+              t: new Date().toISOString(),
+              matchId: this.config.matchId,
+              playerId: player.id,
+              toolName: tc.function.name,
+              error: message,
+              attempt: turnActions,
+            });
+            // A dead MCP transport (the game server process crashed) is an
+            // infrastructure failure, not the player's fault: end the match with
+            // no winner rather than forfeiting this player to its opponent.
+            if (this.mcp.connected === false) {
+              return await this.endMatch("mcp_crash", undefined);
+            }
+            player.retries++;
+            if (player.retries >= this.config.limits.maxRetriesPerTurn) {
+              this.log.write({
+                type: "forfeit",
+                t: new Date().toISOString(),
+                matchId: this.config.matchId,
+                playerId: player.id,
+                reason: `Tool error after ${player.retries} retries: ${message}`,
+              });
+              return await this.endMatch("forfeit", this.getNextPlayer(currentPlayerIndex)?.id);
+            }
+            history.push(assistantTurn(response.content));
+            history.push({
+              role: "user",
+              content: `Tool call error: ${message}. Respond with a corrected make_move.`,
+            });
+            sent = await this.sendAndLog(player, history, toolDefs);
+            if (!sent) break;
+            ({ response, latencyMs: llmLatencyMs } = sent);
+            continue;
+          }
+
+          // Game over signalled by the MCP server.
+          const resultObj = result as Record<string, unknown> | undefined;
+          if (resultObj?.game_over || resultObj?.gameOver) {
+            this.log.write({
+              type: "game.over",
+              t: new Date().toISOString(),
+              matchId: this.config.matchId,
+              playerId: player.id,
+              result: resultObj,
+            });
+            history.push(assistantTurn(response.content));
+            const rawWinnerId = (resultObj?.winner_id ?? resultObj?.winnerId) as string | undefined;
+            return await this.endMatch("game_over", this.mapGameWinner(rawWinnerId));
+          }
+
+          const resultContent = extractTextContent(result);
+          const resultJson = tryParseJson(resultContent);
+
+          // Illegal move → the game server tracks the fault (and forfeits at 3
+          // via game_over). Re-prompt the SAME player within this turn.
+          if (resultJson?.accepted === false) {
+            history.push(assistantTurn(response.content));
+            history.push({
+              role: "user",
+              content: `Illegal move. Faults: ${String(resultJson.faults_total ?? "?")}/3. Try a different legal move.`,
+            });
+            sent = await this.sendAndLog(player, history, toolDefs);
+            if (!sent) break;
+            ({ response, latencyMs: llmLatencyMs } = sent);
+            continue;
+          }
+
+          // Accepted move → the turn is complete.
+          if (resultJson?.accepted === true || (resultJson?.san && resultJson?.piece_moved)) {
+            this.log.write({
+              type: "turn_metrics",
+              t: new Date().toISOString(),
+              matchId: this.config.matchId,
+              playerId: player.id,
+              llmLatencyMs,
+              mcpLatencyMs,
+              turnDurationMs: Math.round(performance.now() - turnStart),
+              turnNumber: turn,
+            });
+
+            if (resultJson?.san && resultJson?.piece_moved) {
+              const detail: LastMoveDetail = {
+                san: String(resultJson.san),
+                piece: String(resultJson.piece_moved),
+                from: String(resultJson.from),
+                to: String(resultJson.to),
+                captured: resultJson.captured ? String(resultJson.captured) : null,
+                promotion: resultJson.promotion ? String(resultJson.promotion) : null,
+                isCheck: Boolean(resultJson.is_check),
+              };
+              player.lastMoves.push(detail);
+              if (player.lastMoves.length > 3) player.lastMoves.shift();
+            }
+
+            // Remember the player's own reasoning (plan memory) for the next
+            // few turns so it doesn't lose track of its intentions.
+            const note = response.content.trim();
+            if (note) {
+              player.notes.push(note);
+              if (player.notes.length > 3) player.notes.shift();
+            }
+
+            player.turnCount++;
+            player.retries = 0;
+            moveMade = true;
+            break;
+          }
+
+          // Read-only tool (e.g. get_board): feed the result back and continue
+          // the turn with the SAME player so it can now move. (The core fix.)
+          history.push(assistantTurn(response.content));
+          history.push({
+            role: "user",
+            content: `Tool result: ${resultContent}\nNow complete your turn by calling make_move.`,
+          });
+          sent = await this.sendAndLog(player, history, toolDefs);
+          if (!sent) break;
+          ({ response, latencyMs: llmLatencyMs } = sent);
+        }
+
+        // The loop only exits without a move when a re-prompt failed (provider
+        // error mid-turn). Treat it as a strike: retry the SAME player next outer
+        // iteration, never rotate.
+        if (!moveMade) {
           player.retries++;
           if (player.retries >= this.config.limits.maxRetriesPerTurn) {
             this.log.write({
@@ -437,13 +422,16 @@ export class MatchRunner {
               t: new Date().toISOString(),
               matchId: this.config.matchId,
               playerId: player.id,
-              reason: `No move produced after ${player.retries} attempts (finishReason: ${response.finishReason ?? "unknown"})`,
+              reason: `Failed to produce a move after ${player.retries} attempts`,
             });
             return await this.endMatch("forfeit", this.getNextPlayer(currentPlayerIndex)?.id);
           }
           pruneHistory(history);
-          continue; // retry the same player; do NOT rotate to the opponent
+          continue;
         }
+
+        // Prune so the next turn rebuilds a fresh, self-contained board message.
+        pruneHistory(history);
 
         // Rotate to next player
         currentPlayerIndex = (currentPlayerIndex + 1) % this.players.length;
@@ -464,6 +452,81 @@ export class MatchRunner {
     }
   }
 
+  /**
+   * Build the per-turn send config for a player: the shared token budget plus
+   * any vendor-recommended sampling settings. Sampling fields are included only
+   * when set, so an unconfigured player keeps the provider's own defaults.
+   */
+  private sendConfig(player: PlayerState): LlmSendConfig {
+    const cfg: LlmSendConfig = {
+      maxTokens: player.maxTokens ?? this.config.limits.maxTokensPerTurn,
+    };
+    if (player.temperature !== undefined) cfg.temperature = player.temperature;
+    if (player.topP !== undefined) cfg.topP = player.topP;
+    if (player.reasoningEffort !== undefined) cfg.reasoningEffort = player.reasoningEffort;
+    if (player.verbosity !== undefined) cfg.verbosity = player.verbosity;
+    if (player.reasoningBudget !== undefined) cfg.reasoningBudget = player.reasoningBudget;
+    return cfg;
+  }
+
+  /**
+   * Send the current history to a player's LLM, logging the request and response
+   * and accumulating token + latency stats. Returns the response with its
+   * latency, or null when the provider call failed (the caller decides whether
+   * to retry or forfeit). Every LLM call in a turn — the first and every
+   * re-prompt — goes through here, so all of them are logged and counted.
+   */
+  private async sendAndLog(
+    player: PlayerState,
+    history: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+    toolDefs: ToolDefinition[],
+  ): Promise<{ response: Awaited<ReturnType<LlmProvider["send"]>>; latencyMs: number } | null> {
+    const start = performance.now();
+    this.log.write({
+      type: "llm.sent",
+      t: new Date().toISOString(),
+      matchId: this.config.matchId,
+      playerId: player.id,
+      messageCount: history.length,
+    });
+
+    let response: Awaited<ReturnType<LlmProvider["send"]>>;
+    try {
+      response = await player.provider.send(history, toolDefs, this.sendConfig(player));
+    } catch (err) {
+      this.log.write({
+        type: "llm.error",
+        t: new Date().toISOString(),
+        matchId: this.config.matchId,
+        playerId: player.id,
+        message: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+
+    const latencyMs = Math.round(performance.now() - start);
+    const responseEntry: LlmResponseEntry = {
+      type: "llm.response",
+      t: new Date().toISOString(),
+      matchId: this.config.matchId,
+      playerId: player.id,
+      content: response.content,
+      tokensInput: response.tokensInput,
+      tokensOutput: response.tokensOutput,
+      finishReason: response.finishReason,
+      latencyMs,
+    };
+    // Reasoning trace is logged for post-mortem only — it is NOT added to `history`,
+    // so it never re-enters the model's context (keeps cost/latency bounded).
+    if (response.reasoning) responseEntry.reasoning = response.reasoning;
+    this.log.write(responseEntry);
+
+    player.totalLlmLatencyMs += latencyMs;
+    player.totalTokensInput += response.tokensInput;
+    player.totalTokensOutput += response.tokensOutput;
+    return { response, latencyMs };
+  }
+
   private getNextPlayer(currentIndex: number): PlayerState | undefined {
     return this.players[(currentIndex + 1) % this.players.length];
   }
@@ -473,7 +536,9 @@ export class MatchRunner {
    * In a 2-player match, player[0] = white, player[1] = black.
    */
   private mapGameWinner(rawWinnerId?: string): string | undefined {
-    if (rawWinnerId === undefined) return undefined;
+    // A drawn game (stalemate / 50-move) sends winner_id: null — normalize the absence
+    // of a winner to undefined so match.end omits winnerId rather than writing null.
+    if (!rawWinnerId) return undefined;
     if (this.players.some((p) => p.id === rawWinnerId)) return rawWinnerId;
     if (this.players.length === 2) {
       if (rawWinnerId === "white") return this.players[0]?.id;
@@ -522,7 +587,7 @@ export class MatchRunner {
 
 const DEFAULT_SYSTEM_PROMPT =
   "You are an AI agent competing in a game.\n" +
-  "Analyze the current game state, then call the appropriate tool to take your action.\n" +
+  "Each turn, first call the state tool to observe the game, then call the action tool.\n" +
   "One sentence stating your action and your short-term intention (shown back to you " +
   "next turn), then the tool call. No lists. No JSON. No long explanations.";
 
@@ -543,6 +608,17 @@ function extractTextContent(result: unknown): string {
 }
 
 /**
+ * Build an assistant history turn with guaranteed non-empty content.
+ *
+ * A model may answer with only a tool call and no text — Anthropic then rejects
+ * a replayed empty assistant message ("text content blocks must be non-empty").
+ * Substitute a placeholder so the within-turn history stays valid for every provider.
+ */
+function assistantTurn(content: string): { role: "assistant"; content: string } {
+  return { role: "assistant", content: content.trim() || "(tool call)" };
+}
+
+/**
  * Try to parse a JSON string, returning null on failure.
  */
 function tryParseJson(raw: string): Record<string, unknown> | null {
@@ -558,37 +634,21 @@ function tryParseJson(raw: string): Record<string, unknown> | null {
 }
 
 /**
- * Format a self-contained board message from the MCP get_board JSON response.
+ * Build the per-turn user message for the pure-pull protocol.
  *
- * The board is always complete, so we never carry stale boards across turns.
- * Instead we append the player's own recent moves (factual memory) and recent
- * reasoning notes (plan memory) so the agent keeps track of its intentions.
+ * The arena does not embed the game state — the model must call `stateTool` itself
+ * to observe the board, then take its action. We carry only the player's own recent
+ * moves (factual memory) and recent reasoning notes (plan memory) so the agent keeps
+ * track of its intentions across turns.
  */
-function formatBoardMessage(
+function formatTurnMessage(
   turn: number,
-  board: Record<string, unknown>,
-  lastOpponentMove: LastMoveDetail | null,
+  stateTool: string,
   recentMoves: LastMoveDetail[],
   recentNotes: string[],
 ): string {
-  const color = String(board.you_are ?? "?");
-  const faults = Number(board.your_faults ?? 0);
-  const check = Boolean(board.check);
-  const checkmate = Boolean(board.checkmate);
-  const stalemate = Boolean(board.stalemate);
-  const ascii = String(board.ascii ?? "");
-  const lastSan = board.last_move_san ? String(board.last_move_san) : null;
-
-  let msg = `Turn ${turn}. You play ${color}.\n`;
-  msg += `Faults: ${faults}/3.\n`;
-
-  if (lastSan && lastOpponentMove) {
-    const advColor = color === "white" ? "Black" : "White";
-    msg += `\n${formatLastLine(lastSan, lastOpponentMove, advColor)}\n`;
-  }
-
-  msg += `\n${ascii}\n\n`;
-  msg += `Check: ${check}. Checkmate: ${checkmate}. Stalemate: ${stalemate}.`;
+  let msg = `Turn ${turn}. It is your turn.\n`;
+  msg += `Call ${stateTool} to observe the current state, then take your action.`;
 
   if (recentMoves.length > 0) {
     msg += `\n\nYour recent moves: ${recentMoves.map((m) => m.san).join(", ")}.`;
@@ -602,47 +662,11 @@ function formatBoardMessage(
 }
 
 /**
- * Format the "Last:" line with move details.
- * Examples:
- *   Last: e4 (Black: pawn e2→e4)
- *   Last: exd5 (Black: pawn e4 takes pawn on d5)
- *   Last: O-O (Black: king e1→g1, castling)
- *   Last: e8=Q (Black: pawn e7→e8, promotes to queen)
- *   Last: Nf3+ (Black: knight g1→f3, check)
- */
-function formatLastLine(san: string, detail: LastMoveDetail, advColor: string): string {
-  const isCastling = san.startsWith("O-O");
-  const isEnPassant = san.includes("e.p.");
-  const isPromotion = detail.promotion != null;
-  const isCapture = detail.captured != null;
-
-  let line = `Last: ${san} (${advColor}: ${detail.piece} ${detail.from}→${detail.to}`;
-
-  if (isCastling) {
-    line += ", castling";
-  } else {
-    if (isCapture) {
-      line += ` takes ${detail.captured}`;
-      if (isEnPassant) line += " en passant";
-    }
-    if (isPromotion) {
-      line += `, promotes to ${detail.promotion}`;
-    }
-    if (detail.isCheck) {
-      line += ", check";
-    }
-  }
-
-  line += ")";
-  return line;
-}
-
-/**
  * Reset the history at the end of a turn, keeping only the system prompt.
  *
- * Each turn rebuilds a self-contained user message (fresh board + recent moves +
- * plan notes via {@link formatBoardMessage}), so nothing else needs to persist —
- * in particular no stale board diagram lingers in context.
+ * Each turn rebuilds a self-contained user message (a prompt to observe the state
+ * via the state tool, plus the player's recent moves and plan notes through
+ * {@link formatTurnMessage}), so nothing else needs to persist.
  */
 function pruneHistory(
   history: Array<{ role: "system" | "user" | "assistant"; content: string }>,

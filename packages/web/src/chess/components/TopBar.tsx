@@ -13,10 +13,10 @@ export function TopBar({
   connected: boolean;
 }) {
   const [left, right] = state.players;
-  // A player's score = value of pieces they captured = the OPPONENT's losses.
-  // (state.capturedByWhite holds White's *losses*, per the MCP server convention.)
+  // A player's score = value of the pieces THEY captured (their trophies).
+  // state.capturedByWhite holds the pieces White captured, per the MCP server convention.
   const scoreFor = (color: Color): number =>
-    materialOf(color === "white" ? state.capturedByBlack : state.capturedByWhite);
+    materialOf(color === "white" ? state.capturedByWhite : state.capturedByBlack);
 
   return (
     <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-slate-800 bg-slate-950/80 px-5 py-3">

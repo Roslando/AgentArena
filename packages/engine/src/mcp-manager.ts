@@ -6,12 +6,15 @@ import type { MatchLogger } from "./match-logger.js";
 /**
  * Manages the lifecycle of an MCP game server connection.
  *
- * Connects, discovers tools, calls tools, and handles reconnection.
+ * Connects, discovers tools, and calls tools. It does NOT reconnect — instead it
+ * tracks whether the transport is still live ({@link connected}) so the match
+ * runner can tell an infrastructure crash apart from a player's fault.
  */
 export class McpManager {
   private client: Client;
   private transport?: StdioClientTransport;
   private _tools: McpTool[] = [];
+  private _connected = false;
 
   constructor(
     private readonly config: McpServerConfig,
@@ -23,6 +26,11 @@ export class McpManager {
 
   get tools(): readonly McpTool[] {
     return this._tools;
+  }
+
+  /** True while the transport is live; flips to false if the server process dies. */
+  get connected(): boolean {
+    return this._connected;
   }
 
   /**
@@ -50,6 +58,11 @@ export class McpManager {
     this.client = new Client({ name: "agentarena-engine", version: "0.1.0" }, { capabilities: {} });
 
     await this.client.connect(this.transport);
+    this._connected = true;
+    // Detect an unexpected transport close (e.g. the game server process crashing).
+    this.client.onclose = () => {
+      this._connected = false;
+    };
 
     // Discover tools
     const result = await this.client.listTools();
@@ -136,6 +149,7 @@ export class McpManager {
    * Gracefully disconnect from the MCP server.
    */
   async disconnect(): Promise<void> {
+    this._connected = false;
     try {
       await this.client.close();
     } catch {

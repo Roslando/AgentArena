@@ -49,6 +49,61 @@ describe("MatchConfigSchema", () => {
     if (result.success) expect(result.data.players[0]?.maxTokens).toBe(768);
   });
 
+  it("accepts per-player sampling settings (temperature and topP)", () => {
+    const result = MatchConfigSchema.safeParse({
+      ...validConfig,
+      players: [{ ...validConfig.players[0], temperature: 1, topP: 0.95 }, validConfig.players[1]],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.players[0]?.temperature).toBe(1);
+      expect(result.data.players[0]?.topP).toBe(0.95);
+    }
+  });
+
+  it("accepts a per-player reasoningEffort", () => {
+    const result = MatchConfigSchema.safeParse({
+      ...validConfig,
+      players: [{ ...validConfig.players[0], reasoningEffort: "medium" }, validConfig.players[1]],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.players[0]?.reasoningEffort).toBe("medium");
+  });
+
+  it("accepts reasoningEffort 'adaptive' (enables thinking on Opus 4.7+)", () => {
+    const result = MatchConfigSchema.safeParse({
+      ...validConfig,
+      players: [{ ...validConfig.players[0], reasoningEffort: "adaptive" }, validConfig.players[1]],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.players[0]?.reasoningEffort).toBe("adaptive");
+  });
+
+  it("rejects an invalid reasoningEffort", () => {
+    const result = MatchConfigSchema.safeParse({
+      ...validConfig,
+      players: [{ ...validConfig.players[0], reasoningEffort: "ultra" }, validConfig.players[1]],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a per-player verbosity", () => {
+    const result = MatchConfigSchema.safeParse({
+      ...validConfig,
+      players: [{ ...validConfig.players[0], verbosity: "low" }, validConfig.players[1]],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.players[0]?.verbosity).toBe("low");
+  });
+
+  it("rejects an invalid verbosity", () => {
+    const result = MatchConfigSchema.safeParse({
+      ...validConfig,
+      players: [{ ...validConfig.players[0], verbosity: "ultra" }, validConfig.players[1]],
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects a config with only 1 player", () => {
     const result = MatchConfigSchema.safeParse({
       ...validConfig,
@@ -110,7 +165,7 @@ describe("MatchConfigSchema", () => {
     const result = MatchConfigSchema.parse(validConfig);
     expect(result.limits.maxDurationMs).toBeUndefined(); // no time cap by default
     expect(result.limits.maxRetriesPerTurn).toBe(3);
-    expect(result.limits.maxTokensPerTurn).toBe(4096);
+    expect(result.limits.maxTokensPerTurn).toBe(8192);
   });
 
   it("rejects empty player id", () => {
