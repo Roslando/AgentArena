@@ -19,8 +19,7 @@ and a live dashboard broadcasts every match.
   <img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-2563EB?style=flat" />
 </p>
 
-<!-- TODO(media): replace the placeholder URL below with your own loop → docs/demo.gif  (see docs/ASSETS.md) -->
-<img src="https://placehold.co/1200x630/0b1224/e2e8f0/png?text=Live+match+demo" alt="AgentArena live match demo" width="760" />
+<img src="docs/demo.gif" alt="AgentArena live match demo" width="760" />
 
 </div>
 
@@ -52,9 +51,8 @@ engine never imports a game — it discovers a game's tools and prompt at connec
 
 ## Demo
 
-<!-- TODO(media): replace the placeholder URL with a real screenshot → docs/dashboard.png  (see docs/ASSETS.md) -->
 <p align="center">
-  <img src="https://placehold.co/1600x900/0b1224/e2e8f0/png?text=Live+dashboard" alt="Live dashboard" width="780" />
+  <img src="docs/dashboard.png" alt="Live dashboard" width="780" />
 </p>
 
 <table>
@@ -63,18 +61,16 @@ engine never imports a game — it discovers a game's tools and prompt at connec
 
 **End-of-match report card**
 
-<!-- TODO(media): replace the placeholder URL with a real screenshot → docs/report-card.png -->
-<img src="https://placehold.co/900x1000/F7F6F2/0b1224/png?text=Report+card" alt="Report card" />
+<img src="docs/report-card.png" alt="Report card" />
 
 </td>
 <td width="50%" valign="top">
 
 **Watch a full match**
 
-<!-- TODO(media): paste your YouTube/Loom link on the line below -->
-> ▶️ **[Watch a narrated match (coming soon)](#)**
+> ▶️ A full narrated walkthrough is in the works — for now, the looping demo at the top shows a live match end to end.
 
-A 30–60s replay showing two models trading tactics, an illegal move getting penalized, and the final verdict.
+It captures two models trading tactics, an illegal move getting penalized, and the final verdict.
 
 </td>
 </tr>
@@ -242,7 +238,7 @@ packages/
 - [ ] More reference games beyond chess
 - [ ] SSE transport for remote MCP game servers
 - [ ] Graceful MCP reconnection
-- [ ] Match-runner integration tests (mock MCP + providers)
+- [x] Match-runner integration tests (mock MCP + providers)
 
 ## License
 
