@@ -1,117 +1,134 @@
 # CLAUDE.md
 
-> The engineering standards I hold my AI pair-programmer to on this project — and myself.
-> They encode how I expect production code to be written and reviewed: deliberate, minimal,
-> and verified before it ships.
-
-Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
-
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
-
-## 1. Think Before Coding
-
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
-
-Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
-
-## 2. Simplicity First
-
-**Minimum code that solves the problem. Nothing speculative.**
-
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
-
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
-
-## 3. Surgical Changes
-
-**Touch only what you must. Clean up only your own mess.**
-
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
-
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-The test: Every changed line should trace directly to the user's request.
-
-## 4. Leave No Dead Code
-
-**Every change leaves the tree clean. No orphans, ever.**
-
-Dead code is the most common smell I see from AI edits: a function gets replaced but the
-old one stays, an import is no longer used, a branch becomes unreachable. After *any*
-add/edit/delete, sweep the blast radius before declaring the task done:
-
-- Remove what your change orphaned: unused imports, variables, functions, types, files,
-  dependencies, CSS classes, dead feature flags.
-- Deleting a function? Find its call sites and remove the now-unreachable branches too.
-- Replacing an approach? Delete the old one in the *same* change. Never leave both "to clean
-  up later" — later never comes.
-- No commented-out code as a safety blanket. Git is the history; the file is the present.
-
-Verify, don't assume: grep the symbol you removed, run the typechecker/linter (it flags
-unused), and read your own diff top to bottom. If a line no longer earns its place, it goes.
-
-(Pre-existing dead code you did not touch: mention it, do not silently delete it — see §3.)
-
-## 5. Research-Backed Recommendations
-
-**When asked for a professional opinion, do not guess — investigate, then recommend.**
-
-For any "what's the best way to…", "is this the right approach", or design/architecture/
-tooling question, a senior answer is researched, not improvised:
-
-- Check current best practice (official docs, the library's own guidance, reputable sources)
-  instead of answering from memory.
-- Prefer the convention the ecosystem actually uses *today* over folklore or stale habits.
-- Come back with options, not a single decree — each with its tradeoffs, then a clear
-  recommendation and why.
-- Cite what you relied on, so the decision is auditable.
-- If the research contradicts my assumption, say so plainly, with evidence.
-
-Default to the boring, idiomatic, well-supported solution. Novelty has to earn its keep.
-
-## 6. Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
-
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-
-## 7. Project Memory (Save Point)
-
-**Maintain `PROJET_MEMORY.md` as a concise, high-value project journal/save point.**
-
-- Update [PROJET_MEMORY.md](file:///c:/Users/HP/Downloads/DevFolio/PROJET_MEMORY.md) at the end of each session or major task.
-- Keep it clean, structured, and free of fluff. It must serve as a video game "save point" for a new AI session to quickly resume work.
-- It should include:
-  - **Current State:** A brief overview of the project's status.
-  - **Recent Changes:** Bullet points of the latest work completed.
-  - **Next Steps:** What needs to be done next.
+> The engineering bar I hold my AI pair-programmer to on **AgentArena** — and myself.
+> Production code here is **deliberate, minimal, and verified before it ships**. This file is the
+> contract; the sections below are non-negotiable unless I say otherwise in a task.
 
 ---
 
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+## ⛔ Critical rules (read first, every task)
+
+1. **No dead code, ever.** Replacing an approach means deleting the old one in the *same* change —
+   never "clean up later." After any edit, sweep the blast radius: orphaned imports, types, helpers,
+   unreachable branches. Verify with grep + `bun run lint` + `bun run build`. (→ §4)
+2. **Surgical diffs only.** Every changed line must trace to my request. Don't refactor, reformat, or
+   "improve" code you weren't asked to touch. (→ §3)
+3. **Verify before declaring done.** A task is finished when `bun run test`, `bun run lint`, and
+   `bun run build` are green — not when the code "looks right." (→ §6)
+4. **Respect the MCP boundary.** The engine and arenas talk **only over MCP**. Never make the engine
+   import an arena's code, and never let an arena reach into engine internals. (→ Project context)
+5. **Ask before assuming.** Multiple interpretations? Surface them. Simpler path? Say so. Unclear?
+   Stop and name what's confusing — don't guess silently. (→ §1)
+6. **Keep the save point current.** Update [`PROJET_MEMORY.md`](./PROJET_MEMORY.md) at the end of any
+   session or major task. (→ §7)
+
+---
+
+## Project context — AgentArena
+
+A task-agnostic **harness** that drops 2–16 LLMs into a task exposed as an **MCP server** and scores
+how they *act* (tool use, cost, reliability, concision). The engine never invents a winner; the MCP
+owns the rules.
+
+- **Runtime & language:** Bun (runtime + workspaces) · TypeScript (strict).
+- **Stack:** `@modelcontextprotocol/sdk` · Zod (runtime validation, single source of truth for types) ·
+  React 19 + Vite + Tailwind · Vitest · Biome.
+- **Monorepo layout:** `packages/{types,engine,cli,server,web,mcps}` — `mcps/` holds one folder per
+  arena (`chess/` is the reference).
+- **Architectural invariants (do not break):**
+  - Engine ↔ arena communicate **only over MCP (stdio)**. The engine discovers tools/prompt/stats at
+    runtime; it never imports arena code.
+  - **Live === Replay:** one pure reducer over the immutable JSONL log drives both. Any change to log
+    shape or the reducer must keep them bit-for-bit identical.
+  - Types live in `packages/types` as **Zod schemas**; derive TS types from them, don't hand-write
+    parallel interfaces.
+  - API keys come from the **environment** (`.env`), never from committed config.
+
+**Commands** (run from repo root):
+
+```bash
+bun run test     # Vitest — full suite
+bun run lint     # Biome
+bun run build    # typecheck + build every package (incl. dashboard)
+bun run start    # boots server + dashboard + match, opens browser
+```
+
+---
+
+## 1. Think before coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+- State assumptions explicitly; if uncertain, ask.
+- Multiple interpretations → present them, don't pick silently.
+- A simpler approach exists → say so, push back when warranted.
+- Something unclear → stop, name it, ask.
+
+## 2. Simplicity first
+
+**The minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked, no abstractions for single-use code.
+- No "flexibility"/"configurability" I didn't request, no error handling for impossible cases.
+- 200 lines that could be 50 → rewrite it. *"Would a senior engineer call this overcomplicated?"*
+
+## 3. Surgical changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+- Don't improve adjacent code, comments, or formatting; match existing style even if you'd differ.
+- Don't refactor what isn't broken.
+- Spot unrelated dead code? Mention it — don't delete it (that's §4's exception).
+- Remove imports/vars/functions **your** change orphaned; leave pre-existing dead code alone.
+
+## 4. Leave no dead code
+
+**Every change leaves the tree clean. No orphans, ever.** The most common AI smell: the old function
+stays after the new one lands. After any add/edit/delete:
+
+- Remove what you orphaned: imports, vars, functions, types, files, deps, Tailwind classes, dead flags.
+- Delete a function → find call sites, remove now-unreachable branches.
+- Replace an approach → delete the old one in the *same* change. No "to clean up later."
+- No commented-out code as a safety blanket. Git is the history; the file is the present.
+- Verify: grep the removed symbol, run `bun run lint` (flags unused) + `bun run build`, read your diff.
+
+## 5. Research-backed recommendations
+
+**Asked for a professional opinion? Investigate, then recommend — don't guess.**
+
+For any "what's the best way…", design, or tooling question:
+- Check current best practice (official docs, the library's own guidance) over memory/folklore.
+- Return **options with tradeoffs**, then a clear recommendation and why; cite what you relied on.
+- If research contradicts my assumption, say so plainly, with evidence.
+- Default to the boring, idiomatic, well-supported solution. Novelty must earn its keep.
+
+## 6. Goal-driven execution
+
+**Define success criteria. Loop until verified.**
+
+- "Add validation" → "Write tests for invalid inputs, then make them pass."
+- "Fix the bug" → "Write a test that reproduces it, then make it pass."
+- "Refactor X" → "Tests green before and after."
+
+For multi-step work, state a brief plan with a verify step each:
+
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+```
+
+Strong criteria let you loop independently; weak ones ("make it work") cause churn.
+
+## 7. Project memory (save point)
+
+**Keep [`PROJET_MEMORY.md`](./PROJET_MEMORY.md) as a concise, high-value save point** — so a fresh AI
+session resumes instantly. Update it at the end of each session/major task. It holds:
+
+- **Current State** — where the project stands.
+- **Recent Changes** — what just shipped.
+- **Next Steps** — what's next.
+
+---
+
+**These rules are working if:** diffs are smaller, rewrites from overcomplication are rarer, and
+clarifying questions arrive *before* implementation — not after a mistake.
