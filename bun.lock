@@ -36,7 +36,7 @@
         "zod": "^3.24.0",
       },
     },
-    "packages/games/chess": {
+    "packages/mcps/chess": {
       "name": "@agentarena/game-chess",
       "version": "0.1.0",
       "dependencies": {
@@ -93,7 +93,7 @@
 
     "@agentarena/engine": ["@agentarena/engine@workspace:packages/engine"],
 
-    "@agentarena/game-chess": ["@agentarena/game-chess@workspace:packages/games/chess"],
+    "@agentarena/game-chess": ["@agentarena/game-chess@workspace:packages/mcps/chess"],
 
     "@agentarena/server": ["@agentarena/server@workspace:packages/server"],
 

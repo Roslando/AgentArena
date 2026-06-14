@@ -135,6 +135,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (result.gameOver) {
         response.gameOver = true;
         response.winnerId = result.winner;
+        // Task-specific final stats AgentArena relays verbatim into the match report.
+        response.stats = {
+          result: output.result,
+          winner: result.winner ?? null,
+          forfeit: true,
+          faults_total: result.faultCount ?? 0,
+        };
       }
 
       return response;
@@ -171,6 +178,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (result.gameOver) {
       response.gameOver = true;
       response.winnerId = result.winner;
+      // Task-specific final stats AgentArena relays verbatim into the match report.
+      response.stats = {
+        result: output.result,
+        winner: result.winner ?? null,
+        faults: { white: state.faults.white, black: state.faults.black },
+        captures: {
+          white: (state.capturedPieces.white ?? []).length,
+          black: (state.capturedPieces.black ?? []).length,
+        },
+      };
     }
 
     return response;

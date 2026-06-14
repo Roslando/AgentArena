@@ -45,11 +45,14 @@
     }
   ],
 
+  "//game": "OPTIONAL: slug passed to the dashboard so it mounts the right front-end renderer (e.g. \"chess\"). Omit when there is no custom front-end for this task.",
+  "game": "chess",
+
   "//mcpServer": "REQUIRED: the MCP game server. Use transport stdio to launch a local process, or sse to connect to a URL.",
   "mcpServer": {
     "transport": "stdio",
     "command": "bun",
-    "args": ["packages/games/chess/dist/index.js"],
+    "args": ["packages/mcps/chess/dist/index.js"],
     "//env": "OPTIONAL: environment variables passed to the game server process.",
     "env": {
       "CHESS_TIME_LIMIT_MS": "3600000"
@@ -59,10 +62,16 @@
   "//stateToolName": "OPTIONAL: name of the tool the engine calls to read game state (default: get_state).",
   "stateToolName": "get_board",
 
-  "//limits": "OPTIONAL: every field has a default, so the whole block can be removed.",
+  "//orchestrationMode": "OPTIONAL: turn-by-turn (default, agents alternate on a shared task) | concurrent (agents act in parallel each round on a shared task) | independent (each agent runs the whole task alone on its own MCP, ranked by composite score).",
+  "orchestrationMode": "turn-by-turn",
+
+  "//limits": "OPTIONAL: every field has a default, so the whole block can be removed. By default nothing blocks an agent that is making progress.",
   "limits": {
     "//maxDurationMs": "OPTIONAL: wall-clock cap on total match duration (ms). Omit for no time limit.",
-    "maxRetriesPerTurn": 3,
+    "//maxConsecutiveErrors": "Circuit breaker: stop an agent after this many consecutive failed tool calls with no success in between (any success resets it). Default 4.",
+    "maxConsecutiveErrors": 4,
+    "//maxIterations": "Safety net: max tool calls toward one action (turn-by-turn/concurrent) or the whole solo run (independent) before the agent is declared stuck. Default 200.",
+    "maxIterations": 200,
     "maxTokensPerTurn": 8192
   }
 }
