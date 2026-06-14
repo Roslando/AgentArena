@@ -87,7 +87,6 @@ const config = MatchConfigSchema.parse({
   ],
   mcpServer: { transport: "stdio", command: "x", args: [] },
   stateToolName: "get_board",
-  limits: { maxRetriesPerTurn: 3 },
 });
 
 afterEach(() => {

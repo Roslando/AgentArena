@@ -25,6 +25,8 @@ export interface PlayerView {
   faults: number;
   /** Total tool calls this player issued (state reads + actions) — agentic protocol signal. */
   toolCalls: number;
+  /** Responses cut off at the token budget before acting — a budget signal, not an error. */
+  truncations: number;
   /** USD price per 1M input tokens, when configured (for live cost display). */
   priceInputPerM?: number;
   /** USD price per 1M output tokens, when configured (for live cost display). */

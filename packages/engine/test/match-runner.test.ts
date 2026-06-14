@@ -75,7 +75,7 @@ const config = MatchConfigSchema.parse({
   ],
   mcpServer: { transport: "stdio", command: "x", args: [] },
   stateToolName: "get_board",
-  limits: { maxRetriesPerTurn: 3 },
+  limits: { maxConsecutiveErrors: 3 },
 });
 
 afterEach(() => {
@@ -84,15 +84,16 @@ afterEach(() => {
 });
 
 describe("MatchRunner — no-move turns", () => {
-  it("retries the same player and forfeits it, never letting the opponent play", async () => {
+  it("re-prompts the same player until the circuit breaker trips, never letting the opponent play", async () => {
     const runner = new MatchRunner(config);
     const result = await runner.run();
 
-    // The stalling player (White) forfeits; the opponent wins by forfeit.
+    // A player that never produces a tool call keeps erroring; the circuit breaker
+    // (maxConsecutiveErrors) cuts it and the opponent wins by forfeit.
     expect(result.reason).toBe("forfeit");
     expect(result.winnerId).toBe("player-2");
 
-    // Only the SAME player was retried, exactly maxRetriesPerTurn times.
+    // Only the SAME player was re-prompted, exactly maxConsecutiveErrors times.
     expect(spies.sendCalls).toEqual(["player-1", "player-1", "player-1"]);
 
     // Critically: make_move was never executed, so the opponent never moved.

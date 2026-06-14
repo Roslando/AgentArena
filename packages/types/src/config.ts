@@ -111,15 +111,35 @@ export type PlayerConfig = z.infer<typeof PlayerConfigSchema>;
 
 /**
  * Arena-level limits for a match.
+ *
+ * Philosophy: this is a benchmark, so by default NOTHING blocks an agent that is
+ * making progress — no clock, no retry cap. The only default guards exist to stop a
+ * genuinely stuck agent from burning tokens in an infinite loop, and both are tuned
+ * so they never fire on a healthy run.
  */
 export const MatchLimitsSchema = z.object({
   /**
    * Optional global wall-clock cap (ms). Omit it for no time limit — a match
-   * then ends only on a real game outcome (checkmate, draw) or a forfeit, never
+   * then ends only on a real task outcome or because an agent got stuck, never
    * on the clock. Set it only if you deliberately want to bound match length.
    */
   maxDurationMs: z.number().positive().optional(),
-  maxRetriesPerTurn: z.number().int().positive().default(3),
+  /**
+   * Circuit breaker. Stop an agent after this many CONSECUTIVE failed tool calls
+   * (rejected actions or tool errors) with no successful action in between. Any
+   * success — an accepted action or even a valid state read — resets the counter,
+   * so a model that errs then recovers is never cut; only one stuck repeating the
+   * same mistake. This is the sole default safeguard against an infinite error
+   * loop, and it does NOT cap a model that keeps making progress.
+   */
+  maxConsecutiveErrors: z.number().int().positive().default(4),
+  /**
+   * Safety net. The maximum number of tool calls the harness allows toward a single
+   * action ("turn-by-turn"/"concurrent") or the whole solo run ("independent")
+   * before it declares the agent stuck. Set generously so it never truncates a
+   * legitimate run — it only kills a runaway loop. Raise it for long-horizon tasks.
+   */
+  maxIterations: z.number().int().positive().default(200),
   maxTokensPerTurn: z.number().int().positive().default(8192),
 });
 
@@ -130,10 +150,28 @@ export type MatchLimits = z.infer<typeof MatchLimitsSchema>;
  */
 export const MatchConfigSchema = z.object({
   matchId: z.string().min(1),
+  /**
+   * Optional task identifier forwarded to the match log so the dashboard can
+   * mount the right renderer. Convention: lowercase slug, e.g. "chess".
+   * Omit when there is no custom front-end for this task.
+   */
+  game: z.string().optional(),
   players: z.array(PlayerConfigSchema).min(2).max(16),
   mcpServer: McpServerConfigSchema,
   limits: MatchLimitsSchema.default({}),
   stateToolName: z.string().default("get_state"),
+  /**
+   * How the harness drives the agents against the MCP task:
+   * - "turn-by-turn" (default): agents alternate on ONE shared task. An agent keeps
+   *   the floor — reading state, retrying after an error — until it takes one accepted
+   *   action, then the next agent plays. For interactive / adversarial tasks.
+   * - "concurrent": every agent acts in the SAME round, in parallel, on one shared
+   *   task. For simultaneous-move or multi-agent tasks.
+   * - "independent": every agent runs the WHOLE task alone on its own isolated MCP
+   *   instance, in parallel. The pure capability benchmark — there is no head-to-head
+   *   winner; the report ranks the models by composite score.
+   */
+  orchestrationMode: z.enum(["turn-by-turn", "concurrent", "independent"]).default("turn-by-turn"),
 });
 
 export type MatchConfig = z.infer<typeof MatchConfigSchema>;

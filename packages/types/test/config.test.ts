@@ -35,9 +35,25 @@ describe("MatchConfigSchema", () => {
   it("accepts a config with explicit limits", () => {
     const result = MatchConfigSchema.safeParse({
       ...validConfig,
-      limits: { maxDurationMs: 600_000, maxRetriesPerTurn: 5, maxTokensPerTurn: 8192 },
+      limits: {
+        maxDurationMs: 600_000,
+        maxConsecutiveErrors: 5,
+        maxIterations: 100,
+        maxTokensPerTurn: 8192,
+      },
     });
     expect(result.success).toBe(true);
+  });
+
+  it("defaults orchestrationMode to turn-by-turn and accepts the other modes", () => {
+    expect(MatchConfigSchema.parse(validConfig).orchestrationMode).toBe("turn-by-turn");
+    for (const mode of ["turn-by-turn", "concurrent", "independent"] as const) {
+      const result = MatchConfigSchema.safeParse({ ...validConfig, orchestrationMode: mode });
+      expect(result.success).toBe(true);
+    }
+    expect(MatchConfigSchema.safeParse({ ...validConfig, orchestrationMode: "duel" }).success).toBe(
+      false,
+    );
   });
 
   it("accepts a per-player maxTokens override", () => {
@@ -164,7 +180,8 @@ describe("MatchConfigSchema", () => {
   it("applies defaults for limits", () => {
     const result = MatchConfigSchema.parse(validConfig);
     expect(result.limits.maxDurationMs).toBeUndefined(); // no time cap by default
-    expect(result.limits.maxRetriesPerTurn).toBe(3);
+    expect(result.limits.maxConsecutiveErrors).toBe(4);
+    expect(result.limits.maxIterations).toBe(200);
     expect(result.limits.maxTokensPerTurn).toBe(8192);
   });
 

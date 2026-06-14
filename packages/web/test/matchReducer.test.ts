@@ -481,4 +481,56 @@ describe("matchReducer", () => {
     const state = matchReducer(initialMatchState(), weird);
     expect(state.status).toBe("idle");
   });
+
+  it("reconciles toolCalls and invalid actions from the authoritative match.summary", () => {
+    // The engine's match.summary is the clean, task-agnostic stats record. The reducer
+    // must adopt its toolCalls and invalidActions (→ faults) like it does tokens/latency,
+    // so the report reads authoritative per-model numbers — not just the live tally.
+    const entries: LogEntry[] = [
+      {
+        type: "match.start",
+        t: "",
+        matchId: "m",
+        players: [
+          { id: "w", name: "W", providerType: "openai", model: "x" },
+          { id: "b", name: "B", providerType: "openai", model: "x" },
+        ],
+      },
+      {
+        type: "match.summary",
+        t: "",
+        matchId: "m",
+        matchDurationMs: 1000,
+        players: [
+          {
+            playerId: "w",
+            turns: 5,
+            totalLlmLatencyMs: 5000,
+            avgLlmLatencyMs: 1000,
+            totalTokensInput: 100,
+            totalTokensOutput: 200,
+            totalTokens: 300,
+            toolCalls: 9,
+            invalidActions: 2,
+          },
+          {
+            playerId: "b",
+            turns: 5,
+            totalLlmLatencyMs: 6000,
+            avgLlmLatencyMs: 1200,
+            totalTokensInput: 120,
+            totalTokensOutput: 240,
+            totalTokens: 360,
+            toolCalls: 10,
+            invalidActions: 0,
+          },
+        ],
+      },
+    ];
+    const state = foldEntries(initialMatchState(), entries, entries.length);
+    expect(state.players[0]?.toolCalls).toBe(9);
+    expect(state.players[0]?.faults).toBe(2);
+    expect(state.players[1]?.toolCalls).toBe(10);
+    expect(state.players[1]?.faults).toBe(0);
+  });
 });

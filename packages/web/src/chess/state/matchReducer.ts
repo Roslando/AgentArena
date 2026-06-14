@@ -25,6 +25,7 @@ export function matchReducer(prev: MatchState, entry: LogEntry): MatchState {
         avgLlmLatencyMs: 0,
         faults: 0,
         toolCalls: 0,
+        truncations: 0,
         ...(p.priceInputPerM !== undefined ? { priceInputPerM: p.priceInputPerM } : {}),
         ...(p.priceOutputPerM !== undefined ? { priceOutputPerM: p.priceOutputPerM } : {}),
       }));
@@ -101,6 +102,11 @@ export function matchReducer(prev: MatchState, entry: LogEntry): MatchState {
                 tokensOutput: s.totalTokensOutput,
                 totalLlmLatencyMs: s.totalLlmLatencyMs,
                 avgLlmLatencyMs: s.avgLlmLatencyMs,
+                toolCalls: s.toolCalls,
+                // The engine's authoritative invalid-action count (chess: illegal moves).
+                faults: s.invalidActions,
+                // Responses cut off at the token budget (a budget signal, not an error).
+                truncations: s.truncations ?? 0,
               }
             : p;
         }),

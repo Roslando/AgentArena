@@ -8,3 +8,4 @@ export { preflight } from "./preflight.js";
 export { McpManager } from "./mcp-manager.js";
 export { MatchRunner } from "./match-runner.js";
 export { MatchLogger } from "./match-logger.js";
+export { buildReport, formatReport, type MatchReport, type PlayerReport } from "./report.js";

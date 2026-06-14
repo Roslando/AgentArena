@@ -1,12 +1,13 @@
 #!/usr/bin/env bun
 
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { MatchRunner, preflight } from "@agentarena/engine";
-import { type MatchConfig, MatchConfigSchema } from "@agentarena/types";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { MatchRunner, buildReport, formatReport, preflight } from "@agentarena/engine";
+import { type LogEntry, type MatchConfig, MatchConfigSchema } from "@agentarena/types";
 
 const DEFAULT_CONFIG = "agentarena.config.json";
 const PORT = Number(process.env.PORT ?? 7070);
+const LOGS_DIR = process.env.LOGS_DIR ?? "logs";
 const SERVER_ENTRY = resolve(process.cwd(), "packages/server/src/index.ts");
 const WEB_INDEX = resolve(process.cwd(), "packages/web/dist/index.html");
 
@@ -46,13 +47,70 @@ function loadConfig(configPath: string): MatchConfig {
   return parsed.data;
 }
 
-/** Old behaviour: run the match in-process and print the result as JSON (no server). */
+/** Parse a saved .jsonl log (by matchId in the logs dir, or an explicit path). */
+function loadLog(idOrPath: string): LogEntry[] {
+  const path = idOrPath.endsWith(".jsonl")
+    ? resolve(process.cwd(), idOrPath)
+    : join(LOGS_DIR, `${idOrPath}.jsonl`);
+  if (!existsSync(path)) {
+    console.error(`Log not found: ${path}`);
+    process.exit(1);
+  }
+  return readFileSync(path, "utf-8")
+    .split("\n")
+    .filter((l) => l.trim())
+    .map((l) => JSON.parse(l) as LogEntry);
+}
+
+/** `agentarena report <matchId|path.jsonl> [--json]` — the per-model decision artifact. */
+function reportCommand(idOrPath: string, asJson: boolean): void {
+  const report = buildReport(loadLog(idOrPath));
+  if (!report) {
+    console.error("No match.summary found in this log — cannot build a report.");
+    process.exit(1);
+  }
+  console.log(asJson ? JSON.stringify(report, null, 2) : formatReport(report));
+}
+
+/** `agentarena list` — the registry of available MCP servers (games/tasks). */
+function listCommand(): void {
+  const mcpsDir = resolve(process.cwd(), "packages/mcps");
+  if (!existsSync(mcpsDir)) {
+    console.log("No packages/mcps directory found.");
+    return;
+  }
+  const dirs = readdirSync(mcpsDir, { withFileTypes: true }).filter((d) => d.isDirectory());
+  console.log("Available MCP servers (tasks):\n");
+  for (const d of dirs) {
+    const pkgPath = join(mcpsDir, d.name, "package.json");
+    let name = d.name;
+    let description = "";
+    if (existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
+          name?: string;
+          description?: string;
+        };
+        name = pkg.name ?? d.name;
+        description = pkg.description ?? "";
+      } catch {
+        // ignore an unreadable package.json — still list the folder
+      }
+    }
+    console.log(`  ${d.name.padEnd(16)} ${name}${description ? ` — ${description}` : ""}`);
+  }
+  console.log("\nPoint a match config's mcpServer at one, then run: agentarena <config>");
+}
+
+/** Headless: run the match in-process, then print the per-model agentic report. */
 async function runHeadless(config: MatchConfig): Promise<void> {
-  const runner = new MatchRunner(config);
-  const result = await runner.run();
+  const entries: LogEntry[] = [];
+  const runner = new MatchRunner(config, (e) => entries.push(e));
+  await runner.run();
   // Disk writes are async; make sure the log is fully flushed before we exit.
   await runner.logger.flush();
-  console.log(JSON.stringify({ matchId: config.matchId, ...result }, null, 2));
+  const report = buildReport(entries);
+  if (report) console.log(`\n${formatReport(report)}`);
 }
 
 /** Poll the server until it answers, so we POST the match only once it is ready. */
@@ -123,12 +181,31 @@ async function runFullStack(config: MatchConfig): Promise<void> {
 
 async function main() {
   const args = process.argv.slice(2);
+  const cmd = args[0];
+
+  // `agentarena list` — registry of available MCP servers.
+  if (cmd === "list") {
+    listCommand();
+    return;
+  }
+
+  // `agentarena report <matchId|path.jsonl> [--json]` — stats from a saved log.
+  if (cmd === "report") {
+    const target = args.slice(1).find((a) => !a.startsWith("--"));
+    if (!target) {
+      console.error("Usage: agentarena report <matchId|path.jsonl> [--json]");
+      process.exit(1);
+    }
+    reportCommand(target, args.includes("--json"));
+    return;
+  }
+
+  // Default: run a match — `agentarena [config] [--headless]`.
   const headless = args.includes("--headless");
   const configPath = resolve(
     process.cwd(),
     args.find((a) => !a.startsWith("--")) ?? DEFAULT_CONFIG,
   );
-
   const config = loadConfig(configPath);
 
   if (headless) await runHeadless(config);

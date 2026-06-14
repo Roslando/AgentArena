@@ -144,6 +144,14 @@ export interface MatchSummaryEntry extends BaseEntry {
   type: "match.summary";
   /** Total match wall time in ms */
   matchDurationMs: number;
+  /**
+   * Opaque, task-specific final stats the MCP server chose to expose (a `stats` object
+   * in its `game_over` result) — material, score, tests-passed, anything. The engine
+   * relays them VERBATIM and never interprets them: AgentArena reports the task's own
+   * metrics alongside the generic agentic ones, it does not judge them. Match-level
+   * here (shared modes have one shared outcome); per-player below for independent runs.
+   */
+  taskStats?: Record<string, unknown>;
   players: Array<{
     playerId: string;
     /** Number of turns this player took */
@@ -156,5 +164,27 @@ export interface MatchSummaryEntry extends BaseEntry {
     totalTokensOutput: number;
     /** Convenience: input + output */
     totalTokens: number;
+    /** Total tool calls issued (state reads + actions) — agentic protocol signal. */
+    toolCalls: number;
+    /**
+     * Count of the player's OWN failures: tool calls the game/task server rejected
+     * (`accepted: false`) or that threw — a malformed call or a move/action against the
+     * rules. The generic, task-agnostic error signal (chess surfaces these as illegal
+     * moves). Error rate = invalidActions / (turns + invalidActions).
+     */
+    invalidActions: number;
+    /**
+     * Count of responses cut off at the token budget before the model could act
+     * (finishReason length/max_tokens). A BUDGET signal, deliberately kept OUT of the
+     * error rate: a truncated turn is not a wrong move, it means maxTokens is too low
+     * for this model. A high count says "raise maxTokens", not "this model is bad".
+     * Optional so logs predating the field still parse.
+     */
+    truncations?: number;
+    /**
+     * Per-player opaque task stats — used by the independent mode, where each agent runs
+     * its own episode and the MCP reports its own `game_over` stats for that agent.
+     */
+    taskStats?: Record<string, unknown>;
   }>;
 }
