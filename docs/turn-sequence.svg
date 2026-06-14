@@ -1,0 +1,78 @@
+<svg viewBox="0 0 920 600" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI',system-ui,-apple-system,sans-serif">
+  <defs>
+    <marker id="solid" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#93c5fd"/>
+    </marker>
+    <marker id="open" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="10" markerHeight="10" orient="auto">
+      <path d="M1 1 L10 6 L1 11" fill="none" stroke="#94a3b8" stroke-width="1.3"/>
+    </marker>
+    <style>
+      .hdr  { font-size: 14px; font-weight: 700; fill: #e2e8f0; }
+      .msg  { font-size: 12.5px; fill: #cbd5e1; }
+      .num  { font-size: 11px; font-weight: 700; fill: #60a5fa; }
+      .note { font-size: 12px; fill: #c4b5fd; }
+      .life { stroke: #475569; stroke-width: 1.2; stroke-dasharray: 4 4; }
+    </style>
+  </defs>
+
+  <!-- Lifelines -->
+  <line x1="140" y1="68" x2="140" y2="582" class="life"/>
+  <line x1="460" y1="68" x2="460" y2="582" class="life"/>
+  <line x1="800" y1="68" x2="800" y2="582" class="life"/>
+
+  <!-- Headers -->
+  <rect x="44" y="22" width="192" height="44" rx="10" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="140" y="49" text-anchor="middle" class="hdr">LLM · current player</text>
+  <rect x="364" y="22" width="192" height="44" rx="10" fill="#0b1224" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="460" y="49" text-anchor="middle" class="hdr">Orchestrator</text>
+  <rect x="704" y="22" width="192" height="44" rx="10" fill="#13241b" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="800" y="49" text-anchor="middle" class="hdr">MCP Task Server</text>
+
+  <!-- 1: E -> L -->
+  <line x1="460" y1="108" x2="142" y2="108" stroke="#93c5fd" stroke-width="1.6" marker-end="url(#solid)"/>
+  <text x="300" y="101" text-anchor="middle" class="msg"><tspan class="num">1 </tspan>your turn — observe state, then act</text>
+
+  <!-- 2: L -> E -->
+  <line x1="140" y1="148" x2="458" y2="148" stroke="#93c5fd" stroke-width="1.6" marker-end="url(#solid)"/>
+  <text x="300" y="141" text-anchor="middle" class="msg"><tspan class="num">2 </tspan>call state tool</text>
+
+  <!-- 3: E -> T -->
+  <line x1="460" y1="188" x2="798" y2="188" stroke="#93c5fd" stroke-width="1.6" marker-end="url(#solid)"/>
+  <text x="630" y="181" text-anchor="middle" class="msg"><tspan class="num">3 </tspan>state tool</text>
+
+  <!-- 4: T -> E (return) -->
+  <line x1="800" y1="228" x2="462" y2="228" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="6 4" marker-end="url(#open)"/>
+  <text x="630" y="221" text-anchor="middle" class="msg"><tspan class="num">4 </tspan>current state</text>
+
+  <!-- 5: E -> L -->
+  <line x1="460" y1="268" x2="142" y2="268" stroke="#93c5fd" stroke-width="1.6" marker-end="url(#solid)"/>
+  <text x="300" y="261" text-anchor="middle" class="msg"><tspan class="num">5 </tspan>state result, now act</text>
+
+  <!-- 6: L -> E (return) -->
+  <line x1="140" y1="308" x2="458" y2="308" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="6 4" marker-end="url(#open)"/>
+  <text x="300" y="301" text-anchor="middle" class="msg"><tspan class="num">6 </tspan>reasoning + action tool</text>
+
+  <!-- 7: E -> T -->
+  <line x1="460" y1="348" x2="798" y2="348" stroke="#93c5fd" stroke-width="1.6" marker-end="url(#solid)"/>
+  <text x="630" y="341" text-anchor="middle" class="msg"><tspan class="num">7 </tspan>action tool</text>
+
+  <!-- alt block -->
+  <rect x="372" y="368" width="520" height="150" rx="6" fill="none" stroke="#a855f7" stroke-width="1.2" stroke-opacity="0.7"/>
+  <rect x="372" y="368" width="74" height="22" rx="0" fill="#1e1b2e" stroke="#a855f7" stroke-width="1.2" stroke-opacity="0.7"/>
+  <text x="409" y="383" text-anchor="middle" class="note" font-weight="700">alt</text>
+
+  <text x="462" y="406" class="note">[ accepted ]</text>
+  <!-- 8: T -> E -->
+  <line x1="800" y1="430" x2="462" y2="430" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="6 4" marker-end="url(#open)"/>
+  <text x="630" y="423" text-anchor="middle" class="msg"><tspan class="num">8 </tspan>accepted (+ game_over? + stats?)</text>
+
+  <line x1="372" y1="452" x2="892" y2="452" stroke="#a855f7" stroke-width="1" stroke-opacity="0.5" stroke-dasharray="5 5"/>
+  <text x="462" y="472" class="note">[ rejected / error ]</text>
+  <!-- 9: T -> E -->
+  <line x1="800" y1="496" x2="462" y2="496" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="6 4" marker-end="url(#open)"/>
+  <text x="630" y="489" text-anchor="middle" class="msg"><tspan class="num">9 </tspan>re-prompt SAME player · circuit breaker</text>
+
+  <!-- 10: E self loop -->
+  <path d="M460 548 h54 v22 h-52" fill="none" stroke="#93c5fd" stroke-width="1.6" marker-end="url(#solid)"/>
+  <text x="524" y="544" class="msg"><tspan class="num">10 </tspan>append to log · broadcast (live + replay)</text>
+</svg>

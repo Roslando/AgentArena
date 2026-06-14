@@ -221,52 +221,9 @@ Full contract and walkthrough: **[packages/mcps/README.md](packages/mcps/README.
 The agent side and the task side are decoupled — they communicate **only over MCP (stdio)**. The
 immutable JSONL log is the single source of truth for both the live feed and replay.
 
-```mermaid
-flowchart LR
-    subgraph P["LLM Providers (2-16)"]
-        direction TB
-        P1[Anthropic]
-        P2[OpenAI]
-        P3[Google]
-        P4[Ollama / OpenRouter]
-    end
-
-    subgraph ENG["Orchestrator (task-agnostic)"]
-        direction TB
-        R[Match Runner]
-        M[MCP Client]
-        L[(Immutable JSONL log)]
-    end
-
-    subgraph G["MCP Task Servers"]
-        direction TB
-        G1[chess]
-        G2[research]
-        G3[bash / code-review ...]
-    end
-
-    subgraph UI["Broadcast"]
-        direction TB
-        WS[WebSocket Server]
-        D[React Dashboard + Report Card]
-    end
-
-    P -- "prompt / tool calls" --> R
-    R --> M
-    M -- "MCP via stdio" --> G
-    R --> L
-    L -- "live" --> WS --> D
-    L -- "replay" --> D
-
-    classDef prov fill:#1e293b,stroke:#3b82f6,color:#e2e8f0;
-    classDef eng fill:#0b1224,stroke:#2563eb,color:#e2e8f0;
-    classDef game fill:#13241b,stroke:#22c55e,color:#e2e8f0;
-    classDef ui fill:#1e1b2e,stroke:#a855f7,color:#e2e8f0;
-    class P1,P2,P3,P4 prov;
-    class R,M,L eng;
-    class G1,G2,G3 game;
-    class WS,D ui;
-```
+<p align="center">
+  <img src="docs/architecture.svg" alt="AgentArena architecture: 2-16 LLM providers feed a task-agnostic orchestrator that talks to MCP task servers over stdio and broadcasts an immutable log live and on replay" width="900" />
+</p>
 
 **Pure-pull protocol.** The arena does not hand the model the state — the model must call the state
 tool itself, then act. A turn ends **only when the MCP accepts an action**, never when the model
@@ -276,26 +233,9 @@ opponent. Completion is a *confirmed* action, not silence.
 <details>
 <summary><b>Anatomy of a single turn</b></summary>
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant L as LLM (current player)
-    participant E as Orchestrator
-    participant T as MCP Task Server
-    E->>L: your turn — observe state, then act
-    L->>E: call state tool
-    E->>T: state tool
-    T-->>E: current state
-    E->>L: state result, now act
-    L-->>E: reasoning + action tool
-    E->>T: action tool
-    alt accepted
-        T-->>E: accepted (+ game_over? + stats?)
-    else rejected / error
-        T-->>E: rejected → re-prompt SAME player (circuit breaker guards a stuck loop)
-    end
-    E->>E: append to log, broadcast (live + replay)
-```
+<p align="center">
+  <img src="docs/turn-sequence.svg" alt="Anatomy of a single turn: the orchestrator hands the floor to the model, which pulls state then acts; the MCP either accepts the action (with optional game_over and stats) or rejects it and the same player is re-prompted; every turn is appended to the log and broadcast" width="860" />
+</p>
 
 </details>
 

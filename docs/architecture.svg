@@ -1,0 +1,56 @@
+<svg viewBox="0 0 960 380" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI',system-ui,-apple-system,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/>
+    </marker>
+    <style>
+      .title { font-size: 15px; font-weight: 700; fill: #e2e8f0; }
+      .item  { font-size: 13px; fill: #cbd5e1; }
+      .edge  { font-size: 12px; fill: #94a3b8; }
+    </style>
+  </defs>
+
+  <!-- LLM Providers -->
+  <rect x="20" y="90" width="220" height="190" rx="12" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="130" y="120" text-anchor="middle" class="title">LLM Providers · 2–16</text>
+  <line x1="44" y1="134" x2="216" y2="134" stroke="#3b82f6" stroke-opacity="0.4"/>
+  <text x="44" y="162" class="item">Anthropic</text>
+  <text x="44" y="190" class="item">OpenAI</text>
+  <text x="44" y="218" class="item">Google</text>
+  <text x="44" y="246" class="item">Ollama / OpenRouter</text>
+
+  <!-- Orchestrator -->
+  <rect x="350" y="90" width="240" height="190" rx="12" fill="#0b1224" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="470" y="120" text-anchor="middle" class="title">Orchestrator</text>
+  <text x="470" y="137" text-anchor="middle" class="edge">task-agnostic</text>
+  <line x1="374" y1="150" x2="566" y2="150" stroke="#2563eb" stroke-opacity="0.4"/>
+  <text x="374" y="178" class="item">Match Runner</text>
+  <text x="374" y="208" class="item">MCP Client</text>
+  <text x="374" y="238" class="item">Immutable JSONL log</text>
+
+  <!-- MCP Task Servers -->
+  <rect x="700" y="20" width="240" height="150" rx="12" fill="#13241b" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="820" y="50" text-anchor="middle" class="title">MCP Task Servers</text>
+  <line x1="724" y1="64" x2="916" y2="64" stroke="#22c55e" stroke-opacity="0.4"/>
+  <text x="724" y="92" class="item">chess</text>
+  <text x="724" y="120" class="item">research</text>
+  <text x="724" y="148" class="item">bash / code-review …</text>
+
+  <!-- Broadcast -->
+  <rect x="700" y="210" width="240" height="150" rx="12" fill="#1e1b2e" stroke="#a855f7" stroke-width="1.5"/>
+  <text x="820" y="240" text-anchor="middle" class="title">Broadcast</text>
+  <line x1="724" y1="254" x2="916" y2="254" stroke="#a855f7" stroke-opacity="0.4"/>
+  <text x="724" y="282" class="item">WebSocket Server</text>
+  <text x="724" y="310" class="item">React Dashboard</text>
+  <text x="724" y="334" class="item">+ Report Card</text>
+
+  <!-- Edges -->
+  <line x1="240" y1="185" x2="348" y2="185" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="294" y="176" text-anchor="middle" class="edge">prompt / tool calls</text>
+
+  <path d="M590 150 C 650 120, 660 100, 698 95" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="648" y="108" text-anchor="middle" class="edge">MCP via stdio</text>
+
+  <path d="M590 240 C 650 270, 660 285, 698 285" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="636" y="300" text-anchor="middle" class="edge">log → live + replay</text>
+</svg>
