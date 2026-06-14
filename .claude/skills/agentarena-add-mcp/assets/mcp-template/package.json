@@ -1,0 +1,19 @@
+{
+  "name": "@agentarena/REPLACE_ME",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "bun run tsc",
+    "dev": "bun run tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^5.7.0"
+  }
+}

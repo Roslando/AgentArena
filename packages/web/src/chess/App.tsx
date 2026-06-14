@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BoardView } from "./components/BoardView";
+import { getRenderer } from "../renderers";
 import { MoveTimeline } from "./components/MoveTimeline";
 import { PlayerPanel } from "./components/PlayerPanel";
 import { SummaryModal } from "./components/SummaryModal";
@@ -41,6 +41,7 @@ export default function App() {
   const state = isLive ? live.state : replay.state;
   const left = state.players[0];
   const right = state.players[1];
+  const GameRenderer = getRenderer(state.game);
 
   return (
     <div className="flex h-screen flex-col text-slate-200">
@@ -54,7 +55,7 @@ export default function App() {
         )}
 
         <div className="flex min-h-0 flex-col items-center justify-center gap-4">
-          <BoardView state={state} />
+          {GameRenderer && <GameRenderer state={state} />}
           {!isLive && (
             <MoveTimeline
               cursor={replay.cursor}

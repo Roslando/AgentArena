@@ -30,7 +30,6 @@ Thumbs.db
 
 # Internal AI dev notes (kept out of the public repo)
 PROJET_MEMORY.md
-.CLAUDE
 
 # Personal match runs — ship only the curated sample logs
 logs/*.jsonl
@@ -40,8 +39,9 @@ logs/*.jsonl
 my json/
 cours-agents-ia/
 
-# Local harness config
-.claude/
+# Local harness config (but ship the project skills)
+.claude/*
+!.claude/skills/
 
 # Demo source videos — the README ships docs/demo.gif instead
 *.mov
